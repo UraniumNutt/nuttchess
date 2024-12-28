@@ -1,3 +1,5 @@
+
+# cargo-features = ["slice_patterns"]
 [package]
 name = "nuttchess"
 version = "0.1.0"
