@@ -11,9 +11,5 @@ fn main() {
     }
     while engine_input != "quit" {
         engine_input = comm.engine_in();
-        comm.engine_out(format!(
-            "info string {} was the input after the prelude\n",
-            engine_input
-        ));
     }
 }
