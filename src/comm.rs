@@ -53,6 +53,7 @@ impl Comm {
         }
         self.engine_out(format!("id name nuttchess"));
         self.engine_out(format!("id author uraniumnutt"));
+        self.engine_out(format!("uciok"));
         while input != "isready" {
             if input == "quit" {
                 return false;
