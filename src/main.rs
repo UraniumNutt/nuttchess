@@ -1,3 +1,4 @@
+mod board;
 mod comm;
 use crate::comm::*;
 use std::path::Path;
