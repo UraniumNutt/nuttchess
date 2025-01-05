@@ -31,8 +31,8 @@ impl BoardState {
             white_knights: 0x42,
             white_rooks: 0x81,
             white_bishops: 0x24,
-            white_queens: 0x8,
-            white_king: 0x10,
+            white_queens: 0x10,
+            white_king: 0x8,
             white_queenside_castle_rights: true,
             white_kingside_castle_rights: true,
 
@@ -40,8 +40,8 @@ impl BoardState {
             black_knights: 0x4200000000000000,
             black_rooks: 0x8100000000000000,
             black_bishops: 0x2400000000000000,
-            black_queens: 0x800000000000000,
-            black_king: 0x1000000000000000,
+            black_queens: 0x1000000000000000,
+            black_king: 0x800000000000000,
             black_queenside_castle_rights: true,
             black_kingside_castle_rights: true,
 
