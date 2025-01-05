@@ -1,4 +1,5 @@
-struct BoardState {
+#[derive(Debug)]
+pub struct BoardState {
     white_pawns: u64,
     white_knights: u64,
     white_rooks: u64,
@@ -83,10 +84,10 @@ impl BoardState {
         let mut fen_tokens = fen.split(|c| c == '/' || c == ' ');
 
         let mut state = BoardState::empty_state();
-        let mut shift_value: u64 = 1 << 64;
+        let mut shift_value: u64 = 1 << 63;
 
         // Parse the placement data
-        for i in 0..7 {
+        for i in 0..8 {
             if let Some(token) = fen_tokens.next() {
                 for character in token.chars() {
                     // If the character is a digit, shift over the mask by that amount
@@ -97,11 +98,13 @@ impl BoardState {
                         // type and set the relevent bit in the board state
                         match character {
                             // First match the black pieces (lowercase)
+                            // p -> pawn
                             // r -> rook
                             // n -> knight
                             // b -> bishop
                             // q -> queen
                             // k -> king
+                            'p' => state.black_pawns |= shift_value,
                             'r' => state.black_rooks |= shift_value,
                             'n' => state.black_knights |= shift_value,
                             'b' => state.black_bishops |= shift_value,
@@ -109,6 +112,7 @@ impl BoardState {
                             'k' => state.black_king |= shift_value,
 
                             // Now try the white pieces (uppercase)
+                            'P' => state.white_pawns |= shift_value,
                             'R' => state.white_rooks |= shift_value,
                             'N' => state.white_knights |= shift_value,
                             'B' => state.white_bishops |= shift_value,
@@ -120,12 +124,16 @@ impl BoardState {
                         }
                         shift_value >>= 1;
                     }
+                    // shift_value >>= 1;
                 }
             }
-            // Check that the proper number of posistions were fed in
-            if shift_value != 1 {
-                return Err("Incorrect number of posistions found".to_string());
-            }
+        }
+        // Check that the proper number of posistions were fed in
+        if shift_value != 0 {
+            return Err(format!(
+                "Incorect number of posistions found (shift_value is {})",
+                shift_value
+            ));
         }
 
         // Now parse the active color
