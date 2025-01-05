@@ -108,7 +108,10 @@ impl BoardState {
                             'r' => state.black_rooks |= shift_value,
                             'n' => state.black_knights |= shift_value,
                             'b' => state.black_bishops |= shift_value,
-                            'q' => state.black_queens |= shift_value,
+                            'q' => {
+                                state.black_queens |= shift_value;
+                                println!("{}", shift_value);
+                            }
                             'k' => state.black_king |= shift_value,
 
                             // Now try the white pieces (uppercase)
@@ -200,7 +203,7 @@ impl BoardState {
                     } else {
                         return Err(format!("Unrecognized value \"{}\" found in rank", rank));
                     }
-                    en_passant_shift = (1 << file_shift) << rank_shift;
+                    en_passant_shift = (1 << file_shift) << ((rank_shift - 1) * 8);
                     state.en_passant_target = en_passant_shift;
                 } else {
                     return Err(
@@ -236,5 +239,23 @@ impl BoardState {
         }
 
         Ok(state)
+    }
+
+    pub fn print_board(self) {
+        println!("{:#018x}: white pawns", self.white_pawns);
+        println!("{:#018x}: white knights", self.white_knights);
+        println!("{:#018x}: white bishops", self.white_bishops);
+        println!("{:#018x}: white rooks", self.white_rooks);
+        println!("{:#018x}: white queens", self.white_queens);
+        println!("{:#018x}: white king", self.white_king);
+
+        println!("{:#018x}: black pawns", self.black_pawns);
+        println!("{:#018x}: black knights", self.black_knights);
+        println!("{:#018x}: black bishops", self.black_bishops);
+        println!("{:#018x}: black rooks", self.black_rooks);
+        println!("{:#018x}: black queens", self.black_queens);
+        println!("{:#018x}: black king", self.black_king);
+
+        println!("{:#018x}: en passant target", self.en_passant_target);
     }
 }
