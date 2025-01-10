@@ -79,57 +79,59 @@ impl BoardState {
         }
     }
 
-    pub fn state_from_fen(fen: String) -> Result<BoardState, String> {
+    pub fn state_from_fen<'a>(
+        mut fen_tokens: impl Iterator<Item = &'a str>,
+    ) -> Result<BoardState, String> {
         // Split the fen string at every / and space
-        let mut fen_tokens = fen.split(|c| c == '/' || c == ' ');
+        // let mut fen_tokens = fen.split(|c| c == '/' || c == ' ');
 
         let mut state = BoardState::empty_state();
         let mut shift_value: u64 = 1 << 63;
 
         // Parse the placement data
-        for i in 0..8 {
-            if let Some(token) = fen_tokens.next() {
-                for character in token.chars() {
-                    // If the character is a digit, shift over the mask by that amount
-                    if let Some(digit) = character.to_digit(10) {
-                        shift_value >>= digit;
-                    } else {
-                        // If the character is not a digit, match it to the piece
-                        // type and set the relevent bit in the board state
-                        match character {
-                            // First match the black pieces (lowercase)
-                            // p -> pawn
-                            // r -> rook
-                            // n -> knight
-                            // b -> bishop
-                            // q -> queen
-                            // k -> king
-                            'p' => state.black_pawns |= shift_value,
-                            'r' => state.black_rooks |= shift_value,
-                            'n' => state.black_knights |= shift_value,
-                            'b' => state.black_bishops |= shift_value,
-                            'q' => {
-                                state.black_queens |= shift_value;
-                                println!("{}", shift_value);
-                            }
-                            'k' => state.black_king |= shift_value,
 
-                            // Now try the white pieces (uppercase)
-                            'P' => state.white_pawns |= shift_value,
-                            'R' => state.white_rooks |= shift_value,
-                            'N' => state.white_knights |= shift_value,
-                            'B' => state.white_bishops |= shift_value,
-                            'Q' => state.white_queens |= shift_value,
-                            'K' => state.white_king |= shift_value,
-                            _ => {
-                                return Err(format!("Unexpected character found in {}", character))
-                            }
-                        }
-                        shift_value >>= 1;
-                    }
-                    // shift_value >>= 1;
+        if let Some(token) = fen_tokens.next() {
+            for character in token.chars() {
+                if character == '/' {
+                    continue;
                 }
+                // If the character is a digit, shift over the mask by that amount
+                if let Some(digit) = character.to_digit(10) {
+                    shift_value >>= digit;
+                } else {
+                    // If the character is not a digit, match it to the piece
+                    // type and set the relevent bit in the board state
+                    match character {
+                        // First match  black pieces (lowercase)
+                        // p -> pawn
+                        // r -> rook
+                        // n -> knight
+                        // b -> bishop
+                        // q -> queen
+                        // k -> king
+                        'p' => state.black_pawns |= shift_value,
+                        'r' => state.black_rooks |= shift_value,
+                        'n' => state.black_knights |= shift_value,
+                        'b' => state.black_bishops |= shift_value,
+                        'q' => state.black_queens |= shift_value,
+                        'k' => state.black_king |= shift_value,
+
+                        // Now try the white pieces (uppercase)
+                        'P' => state.white_pawns |= shift_value,
+                        'R' => state.white_rooks |= shift_value,
+                        'N' => state.white_knights |= shift_value,
+                        'B' => state.white_bishops |= shift_value,
+                        'Q' => state.white_queens |= shift_value,
+                        'K' => state.white_king |= shift_value,
+
+                        _ => return Err(format!("Unexpected character found in {}", character)),
+                    }
+                    shift_value >>= 1;
+                }
+                // shift_value >>= 1;
             }
+        } else {
+            return Err("No fenstring placement data found".to_string());
         }
         // Check that the proper number of posistions were fed in
         if shift_value != 0 {
@@ -241,7 +243,105 @@ impl BoardState {
         Ok(state)
     }
 
-    pub fn print_board(self) {
+    pub fn apply_move(&mut self, chess_move: &str) -> Result<(), String> {
+        // Get a bitboard mask of the starting move
+        let start_mask = posistion_to_mask(
+            chess_move.chars().nth(0).unwrap(),
+            chess_move.chars().nth(1).unwrap(),
+        )
+        .unwrap();
+        // Get a bitboard mask of the ending move
+        let end_mask = posistion_to_mask(
+            chess_move.chars().nth(2).unwrap(),
+            chess_move.chars().nth(3).unwrap(),
+        )
+        .unwrap();
+
+        // Clear the starting posisition, and set then ending posistion
+        match start_mask {
+            // White
+
+            // Pawns
+            e if e & self.white_pawns != 0 => {
+                self.white_pawns &= !e;
+                self.white_pawns |= end_mask;
+            }
+
+            // Knights
+            e if e & self.white_knights != 0 => {
+                self.white_knights &= !e;
+                self.white_knights |= end_mask;
+            }
+
+            // Biships
+            e if e & self.white_bishops != 0 => {
+                self.white_bishops &= !e;
+                self.white_bishops |= end_mask;
+            }
+
+            // Rooks
+            e if e & self.white_rooks != 0 => {
+                self.white_rooks &= !e;
+                self.white_rooks |= end_mask;
+            }
+
+            // Queens
+            e if e & self.white_queens != 0 => {
+                self.white_queens &= !e;
+                self.white_queens |= end_mask;
+            }
+
+            // Kings
+            e if e & self.white_king != 0 => {
+                self.white_king &= !e;
+                self.white_king |= end_mask;
+            }
+
+            // Black
+
+            // Pawns
+            e if e & self.black_pawns != 0 => {
+                self.black_pawns &= !e;
+                self.black_pawns |= end_mask;
+            }
+
+            // Knights
+            e if e & self.black_knights != 0 => {
+                self.black_knights &= !e;
+                self.black_knights |= end_mask;
+            }
+
+            // Biships
+            e if e & self.black_bishops != 0 => {
+                self.black_bishops &= !e;
+                self.black_bishops |= end_mask;
+            }
+
+            // Rooks
+            e if e & self.black_rooks != 0 => {
+                self.black_rooks &= !e;
+                self.black_rooks |= end_mask;
+            }
+
+            // Queens
+            e if e & self.black_queens != 0 => {
+                self.black_queens &= !e;
+                self.black_queens |= end_mask;
+            }
+
+            // Kings
+            e if e & self.black_king != 0 => {
+                self.black_king &= !e;
+                self.black_king |= end_mask;
+            }
+
+            _ => return Err(format!("No piece for move {}", chess_move)),
+        }
+
+        Ok(())
+    }
+
+    pub fn print_board(&self) {
         println!("{:#018x}: white pawns", self.white_pawns);
         println!("{:#018x}: white knights", self.white_knights);
         println!("{:#018x}: white bishops", self.white_bishops);
@@ -258,4 +358,25 @@ impl BoardState {
 
         println!("{:#018x}: en passant target", self.en_passant_target);
     }
+}
+
+fn posistion_to_mask(file: char, rank: char) -> Result<u64, String> {
+    let file_shift = match file {
+        'h' => 0,
+        'g' => 1,
+        'f' => 2,
+        'e' => 3,
+        'd' => 4,
+        'c' => 5,
+        'b' => 6,
+        'a' => 7,
+        _ => return Err(format!("Unrecognized value \"{}\" found in file", file)),
+    };
+    let rank_shift: i32;
+    if let Some(rank_value) = rank.to_digit(10) {
+        rank_shift = rank_value as i32;
+    } else {
+        return Err(format!("Unrecognized value \"{}\" found in rank", rank));
+    }
+    Ok((1 << file_shift) << ((rank_shift - 1) * 8))
 }
