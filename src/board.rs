@@ -24,6 +24,25 @@ pub struct BoardState {
     fullmove_counter: u16,
 }
 
+pub struct MoveRep {
+    starting_square: u64,
+    ending_square: u64,
+    promotion: Option<Promotion>,
+}
+
+enum Promotion {
+    Queen,
+    Bishop,
+    Rook,
+    Knight,
+}
+
+pub struct TreeNode {
+    board_state: BoardState,
+    applied_move: Option<MoveRep>,
+    children: Vec<TreeNode>,
+}
+
 impl BoardState {
     pub fn starting_state() -> BoardState {
         BoardState {
@@ -243,21 +262,10 @@ impl BoardState {
         Ok(state)
     }
 
-    pub fn apply_move(&mut self, chess_move: &str) -> Result<(), String> {
-        // Get a bitboard mask of the starting move
-        let start_mask = position_to_mask(
-            chess_move.chars().nth(0).unwrap(),
-            chess_move.chars().nth(1).unwrap(),
-        )
-        .unwrap();
-        // Get a bitboard mask of the ending move
-        let end_mask = position_to_mask(
-            chess_move.chars().nth(2).unwrap(),
-            chess_move.chars().nth(3).unwrap(),
-        )
-        .unwrap();
-
+    pub fn apply_move(&mut self, play: MoveRep) -> Result<(), String> {
         // Clear the starting posisition, and set then ending posistion
+        let (start_mask, end_mask, promotion) =
+            (play.starting_square, play.ending_square, play.promotion);
         match start_mask {
             // White
 
@@ -335,13 +343,76 @@ impl BoardState {
                 self.black_king |= end_mask;
             }
 
-            _ => return Err(format!("No piece for move {}", chess_move)),
+            // TODO implement some formating so we can print the play
+            // _ => return Err(format!("No piece for move {}", play)),
+            _ => return Err("No target piece found".to_string()),
         }
 
         // Before returning, change the side to move
         self.white_to_move = !self.white_to_move;
-
         Ok(())
+    }
+
+    pub fn apply_string_move(&mut self, chess_move: &str) -> Result<(), String> {
+        // Get a bitboard mask of the starting move
+        let start_mask = position_to_mask(
+            chess_move.chars().nth(0).unwrap(),
+            chess_move.chars().nth(1).unwrap(),
+        )
+        .unwrap();
+        // Get a bitboard mask of the ending move
+        let end_mask = position_to_mask(
+            chess_move.chars().nth(2).unwrap(),
+            chess_move.chars().nth(3).unwrap(),
+        )
+        .unwrap();
+
+        let play = MoveRep {
+            starting_square: start_mask,
+            ending_square: end_mask,
+            promotion: None,
+        };
+
+        self.apply_move(play)
+    }
+
+    // generate the moves from a given position
+    pub fn generate_moves(&mut self) -> Vec<MoveRep> {
+        let mut moves = Vec::new();
+
+        // Generate pawn moves
+        match self.white_to_move {
+            // white pawns
+            true => todo!(),
+            // black pawns
+            false => {
+                moves.append(&mut self.black_pawn_moves());
+            }
+        }
+
+        moves
+    }
+
+    fn black_pawn_moves(&mut self) -> Vec<MoveRep> {
+        let mut moves = Vec::new();
+
+        for shift_value in 0..64 {
+            let mask = 1 << shift_value;
+
+            // If there is no pawn there, go skip
+            if mask & self.black_pawns == 0 {
+                continue;
+            }
+
+            let start = mask;
+            let end = mask >> 8;
+            moves.push(MoveRep {
+                starting_square: start,
+                ending_square: end,
+                promotion: None,
+            })
+        }
+        moves
     }
 
     pub fn print_board(&self) {
@@ -360,6 +431,48 @@ impl BoardState {
         println!("{:#018x}: black king", self.black_king);
 
         println!("{:#018x}: en passant target", self.en_passant_target);
+    }
+}
+
+impl MoveRep {
+    pub fn to_string(&self) -> Result<String, String> {
+        let start = self.starting_square;
+        let end = self.ending_square;
+        let mut mov = String::new();
+        mov.push_str(MoveRep::mask_to_string(start).unwrap().as_ref());
+        mov.push_str(MoveRep::mask_to_string(end).unwrap().as_ref());
+        Ok(mov)
+    }
+
+    fn mask_to_string(mask: u64) -> Result<String, String> {
+        let mut pos = String::new();
+
+        let file = mask.ilog2() / 8;
+        let rank = mask.ilog2() % 8;
+        match rank {
+            0 => pos.push('h'),
+            1 => pos.push('g'),
+            2 => pos.push('f'),
+            3 => pos.push('e'),
+            4 => pos.push('d'),
+            5 => pos.push('c'),
+            6 => pos.push('b'),
+            7 => pos.push('a'),
+            _ => return Err("Invalid mask found".to_string()),
+        }
+        match file {
+            0 => pos.push('1'),
+            1 => pos.push('2'),
+            2 => pos.push('3'),
+            3 => pos.push('4'),
+            4 => pos.push('5'),
+            5 => pos.push('6'),
+            6 => pos.push('7'),
+            7 => pos.push('8'),
+            _ => return Err("Invalid mask found".to_string()),
+        }
+
+        Ok(pos)
     }
 }
 

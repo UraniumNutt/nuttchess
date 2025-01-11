@@ -2,6 +2,7 @@ mod board;
 mod comm;
 use crate::board::*;
 use crate::comm::*;
+use rand::seq::SliceRandom;
 use std::path::Path;
 
 fn main() {
@@ -20,6 +21,7 @@ fn main() {
     let mut engine_input;
     let mut running = true;
     let mut pos_set = false;
+    let mut board = BoardState::starting_state();
     let log_path = Path::new("log.txt");
     let mut comm = Comm::create(log_path).unwrap();
     while running {
@@ -47,7 +49,7 @@ fn main() {
             // position
             "position" => match tokens.next().unwrap() {
                 "fen" => {
-                    let mut board = match BoardState::state_from_fen(&mut tokens) {
+                    board = match BoardState::state_from_fen(&mut tokens) {
                         Ok(e) => e,
                         Err(e) => {
                             comm.engine_out(format!("Invalid fen string {}", e.to_string()));
@@ -58,7 +60,7 @@ fn main() {
                     match tokens.next().unwrap() {
                         "moves" => {
                             while let Some(chess_move) = tokens.next() {
-                                if let Err(e) = board.apply_move(chess_move) {
+                                if let Err(e) = board.apply_string_move(chess_move) {
                                     comm.engine_out(format!(
                                         "Error applying move: {}",
                                         e.to_string()
@@ -74,9 +76,9 @@ fn main() {
                 }
                 "startpos" => match tokens.next().unwrap() {
                     "moves" => {
-                        let mut board = BoardState::starting_state();
+                        board = BoardState::starting_state();
                         while let Some(chess_move) = tokens.next() {
-                            if let Err(e) = board.apply_move(chess_move) {
+                            if let Err(e) = board.apply_string_move(chess_move) {
                                 comm.engine_out(format!("Error applying move: {}", e.to_string()));
                             }
                         }
@@ -95,7 +97,11 @@ fn main() {
                 }
 
                 // TODO make this not temporary
-                comm.engine_out("bestmove d7d5".to_string());
+                // comm.engine_out("bestmove d7d5".to_string());
+                let moves = board.generate_moves();
+                let randmove = moves.choose(&mut rand::thread_rng()).unwrap();
+                let move_string = randmove.to_string().unwrap();
+                comm.engine_out(format!("bestmove {}", move_string));
             }
             // If the option is not recognized
             e => {
