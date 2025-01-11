@@ -133,10 +133,10 @@ impl BoardState {
         } else {
             return Err("No fenstring placement data found".to_string());
         }
-        // Check that the proper number of posistions were fed in
+        // Check that the proper number of positions were fed in
         if shift_value != 0 {
             return Err(format!(
-                "Incorect number of posistions found (shift_value is {})",
+                "Incorect number of positions found (shift_value is {})",
                 shift_value
             ));
         }
@@ -245,13 +245,13 @@ impl BoardState {
 
     pub fn apply_move(&mut self, chess_move: &str) -> Result<(), String> {
         // Get a bitboard mask of the starting move
-        let start_mask = posistion_to_mask(
+        let start_mask = position_to_mask(
             chess_move.chars().nth(0).unwrap(),
             chess_move.chars().nth(1).unwrap(),
         )
         .unwrap();
         // Get a bitboard mask of the ending move
-        let end_mask = posistion_to_mask(
+        let end_mask = position_to_mask(
             chess_move.chars().nth(2).unwrap(),
             chess_move.chars().nth(3).unwrap(),
         )
@@ -338,6 +338,9 @@ impl BoardState {
             _ => return Err(format!("No piece for move {}", chess_move)),
         }
 
+        // Before returning, change the side to move
+        self.white_to_move = !self.white_to_move;
+
         Ok(())
     }
 
@@ -360,7 +363,7 @@ impl BoardState {
     }
 }
 
-fn posistion_to_mask(file: char, rank: char) -> Result<u64, String> {
+fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
     let file_shift = match file {
         'h' => 0,
         'g' => 1,

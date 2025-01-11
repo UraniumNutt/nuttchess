@@ -40,34 +40,4 @@ impl Comm {
         self.file.flush().unwrap();
         buffer.trim().to_string()
     }
-
-    // Quick and dirty skip past the uci init
-    // TODO make the engine properly implement uci
-    pub fn prelude(&mut self) -> bool {
-        let mut input = self.engine_in();
-        while input != "uci" {
-            if input == "quit" {
-                return false;
-            }
-            input = self.engine_in();
-        }
-        self.engine_out(format!("id name nuttchess"));
-        self.engine_out(format!("id author uraniumnutt"));
-        self.engine_out(format!("uciok"));
-        while input != "isready" {
-            if input == "quit" {
-                return false;
-            }
-            input = self.engine_in();
-        }
-        self.engine_out("readyok".to_string());
-
-        while input != "ucinewgame" {
-            if input == "quit" {
-                return false;
-            }
-            input = self.engine_in();
-        }
-        true
-    }
 }
