@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct BoardState {
     white_pawns: u64,
     white_knights: u64,
@@ -24,12 +24,14 @@ pub struct BoardState {
     fullmove_counter: u16,
 }
 
+#[derive(Copy, Clone)]
 pub struct MoveRep {
     starting_square: u64,
     ending_square: u64,
     promotion: Option<Promotion>,
 }
 
+#[derive(Copy, Clone)]
 enum Promotion {
     Queen,
     Bishop,
@@ -38,9 +40,9 @@ enum Promotion {
 }
 
 pub struct TreeNode {
-    board_state: BoardState,
-    applied_move: Option<MoveRep>,
-    children: Vec<TreeNode>,
+    pub board_state: BoardState,
+    pub applied_move: Option<MoveRep>,
+    pub children: Vec<TreeNode>,
 }
 
 impl BoardState {
@@ -262,85 +264,86 @@ impl BoardState {
         Ok(state)
     }
 
-    pub fn apply_move(&mut self, play: MoveRep) -> Result<(), String> {
+    pub fn apply_move(&self, play: &MoveRep) -> Result<BoardState, String> {
         // Clear the starting posisition, and set then ending posistion
         let (start_mask, end_mask, promotion) =
-            (play.starting_square, play.ending_square, play.promotion);
+            (&play.starting_square, &play.ending_square, &play.promotion);
+        let mut state = self.to_owned();
         match start_mask {
             // White
 
             // Pawns
-            e if e & self.white_pawns != 0 => {
-                self.white_pawns &= !e;
-                self.white_pawns |= end_mask;
+            e if e & state.white_pawns != 0 => {
+                state.white_pawns &= !e;
+                state.white_pawns |= end_mask;
             }
 
             // Knights
-            e if e & self.white_knights != 0 => {
-                self.white_knights &= !e;
-                self.white_knights |= end_mask;
+            e if e & state.white_knights != 0 => {
+                state.white_knights &= !e;
+                state.white_knights |= end_mask;
             }
 
             // Biships
-            e if e & self.white_bishops != 0 => {
-                self.white_bishops &= !e;
-                self.white_bishops |= end_mask;
+            e if e & state.white_bishops != 0 => {
+                state.white_bishops &= !e;
+                state.white_bishops |= end_mask;
             }
 
             // Rooks
-            e if e & self.white_rooks != 0 => {
-                self.white_rooks &= !e;
-                self.white_rooks |= end_mask;
+            e if e & state.white_rooks != 0 => {
+                state.white_rooks &= !e;
+                state.white_rooks |= end_mask;
             }
 
             // Queens
-            e if e & self.white_queens != 0 => {
-                self.white_queens &= !e;
-                self.white_queens |= end_mask;
+            e if e & state.white_queens != 0 => {
+                state.white_queens &= !e;
+                state.white_queens |= end_mask;
             }
 
             // Kings
-            e if e & self.white_king != 0 => {
-                self.white_king &= !e;
-                self.white_king |= end_mask;
+            e if e & state.white_king != 0 => {
+                state.white_king &= !e;
+                state.white_king |= end_mask;
             }
 
             // Black
 
             // Pawns
-            e if e & self.black_pawns != 0 => {
-                self.black_pawns &= !e;
-                self.black_pawns |= end_mask;
+            e if e & state.black_pawns != 0 => {
+                state.black_pawns &= !e;
+                state.black_pawns |= end_mask;
             }
 
             // Knights
-            e if e & self.black_knights != 0 => {
-                self.black_knights &= !e;
-                self.black_knights |= end_mask;
+            e if e & state.black_knights != 0 => {
+                state.black_knights &= !e;
+                state.black_knights |= end_mask;
             }
 
             // Biships
-            e if e & self.black_bishops != 0 => {
-                self.black_bishops &= !e;
-                self.black_bishops |= end_mask;
+            e if e & state.black_bishops != 0 => {
+                state.black_bishops &= !e;
+                state.black_bishops |= end_mask;
             }
 
             // Rooks
-            e if e & self.black_rooks != 0 => {
-                self.black_rooks &= !e;
-                self.black_rooks |= end_mask;
+            e if e & state.black_rooks != 0 => {
+                state.black_rooks &= !e;
+                state.black_rooks |= end_mask;
             }
 
             // Queens
-            e if e & self.black_queens != 0 => {
-                self.black_queens &= !e;
-                self.black_queens |= end_mask;
+            e if e & state.black_queens != 0 => {
+                state.black_queens &= !e;
+                state.black_queens |= end_mask;
             }
 
             // Kings
-            e if e & self.black_king != 0 => {
-                self.black_king &= !e;
-                self.black_king |= end_mask;
+            e if e & state.black_king != 0 => {
+                state.black_king &= !e;
+                state.black_king |= end_mask;
             }
 
             // TODO implement some formating so we can print the play
@@ -349,35 +352,39 @@ impl BoardState {
         }
 
         // Before returning, change the side to move
-        self.white_to_move = !self.white_to_move;
-        Ok(())
+        state.white_to_move = !state.white_to_move;
+        Ok(state)
     }
 
-    pub fn apply_string_move(&mut self, chess_move: &str) -> Result<(), String> {
-        // Get a bitboard mask of the starting move
-        let start_mask = position_to_mask(
-            chess_move.chars().nth(0).unwrap(),
-            chess_move.chars().nth(1).unwrap(),
-        )
-        .unwrap();
-        // Get a bitboard mask of the ending move
-        let end_mask = position_to_mask(
-            chess_move.chars().nth(2).unwrap(),
-            chess_move.chars().nth(3).unwrap(),
-        )
-        .unwrap();
+    pub fn search(self, depth: u64) -> Option<TreeNode> {
+        if depth == 0 {
+            return None;
+        }
 
-        let play = MoveRep {
-            starting_square: start_mask,
-            ending_square: end_mask,
-            promotion: None,
+        let mut children: Vec<TreeNode> = vec![];
+        let child_moves = self.generate_moves();
+        for child_move in child_moves {
+            let child_node = self.apply_move(&child_move).unwrap().search(depth - 1);
+            let node = TreeNode {
+                board_state: self.apply_move(&child_move).unwrap(),
+                applied_move: Some(child_move),
+                children: match child_node {
+                    Some(e) => e.children,
+                    None => vec![],
+                },
+            };
+            children.push(node);
+        }
+        let tree = TreeNode {
+            board_state: self,
+            applied_move: None,
+            children: children,
         };
-
-        self.apply_move(play)
+        Some(tree)
     }
 
     // generate the moves from a given position
-    pub fn generate_moves(&mut self) -> Vec<MoveRep> {
+    pub fn generate_moves(&self) -> Vec<MoveRep> {
         let mut moves = Vec::new();
 
         // Generate pawn moves
@@ -393,7 +400,7 @@ impl BoardState {
         moves
     }
 
-    fn black_pawn_moves(&mut self) -> Vec<MoveRep> {
+    fn black_pawn_moves(&self) -> Vec<MoveRep> {
         let mut moves = Vec::new();
 
         for shift_value in 0..64 {
@@ -413,6 +420,29 @@ impl BoardState {
             })
         }
         moves
+    }
+
+    pub fn apply_string_move(&self, chess_move: &str) -> Result<BoardState, String> {
+        // Get a bitboard mask of the starting move
+        let start_mask = position_to_mask(
+            chess_move.chars().nth(0).unwrap(),
+            chess_move.chars().nth(1).unwrap(),
+        )
+        .unwrap();
+        // Get a bitboard mask of the ending move
+        let end_mask = position_to_mask(
+            chess_move.chars().nth(2).unwrap(),
+            chess_move.chars().nth(3).unwrap(),
+        )
+        .unwrap();
+
+        let play = MoveRep {
+            starting_square: start_mask,
+            ending_square: end_mask,
+            promotion: None,
+        };
+
+        self.apply_move(&play)
     }
 
     pub fn print_board(&self) {

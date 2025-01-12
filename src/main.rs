@@ -96,12 +96,25 @@ fn main() {
                     continue;
                 }
 
+                match tokens.next().unwrap() {
+                    "perft" => {
+                        if let Some(digit) = tokens.next() {
+                            // Do the perft at this depth
+                            let tree = board.search(1).unwrap();
+                            comm.engine_out(format!("Number of nodes: {}", tree.children.len()));
+                        } else {
+                            comm.engine_out("Expected depth token".to_string());
+                        }
+                    }
+                    e => comm.engine_out(format!("Unrecognized token {}", e)),
+                }
+
                 // TODO make this not temporary
                 // comm.engine_out("bestmove d7d5".to_string());
-                let moves = board.generate_moves();
-                let randmove = moves.choose(&mut rand::thread_rng()).unwrap();
-                let move_string = randmove.to_string().unwrap();
-                comm.engine_out(format!("bestmove {}", move_string));
+                // let moves = board.generate_moves();
+                // let randmove = moves.choose(&mut rand::thread_rng()).unwrap();
+                // let move_string = randmove.to_string().unwrap();
+                // comm.engine_out(format!("bestmove {}", move_string));
             }
             // If the option is not recognized
             e => {
