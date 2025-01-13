@@ -98,10 +98,18 @@ fn main() {
 
                 match tokens.next().unwrap() {
                     "perft" => {
-                        if let Some(digit) = tokens.next() {
+                        if let Some(digit_string) = tokens.next() {
                             // Do the perft at this depth
-                            let tree = board.search(1).unwrap();
-                            comm.engine_out(format!("Number of nodes: {}", tree.children.len()));
+                            if let Ok(digit) = digit_string.parse::<u64>() {
+                                let tree = board.search(digit).unwrap();
+                                let leaf_nodes = tree.get_leaf_nodes();
+                                comm.engine_out(format!("Number of nodes: {}", leaf_nodes));
+                            } else {
+                                comm.engine_out(format!(
+                                    "Invalid value for depth {}",
+                                    digit_string
+                                ));
+                            }
                         } else {
                             comm.engine_out("Expected depth token".to_string());
                         }

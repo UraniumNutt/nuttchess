@@ -45,6 +45,19 @@ pub struct TreeNode {
     pub children: Vec<TreeNode>,
 }
 
+impl TreeNode {
+    pub fn get_leaf_nodes(&self) -> u64 {
+        if self.children.len() == 0 {
+            return 1;
+        }
+        let mut count = 0;
+        for child in &self.children {
+            count += child.get_leaf_nodes();
+        }
+        count
+    }
+}
+
 impl BoardState {
     pub fn starting_state() -> BoardState {
         BoardState {
@@ -390,14 +403,19 @@ impl BoardState {
         // Generate pawn moves
         match self.white_to_move {
             // white pawns
-            true => todo!(),
+            true => moves.append(&mut self.white_pawn_moves()),
             // black pawns
-            false => {
-                moves.append(&mut self.black_pawn_moves());
-            }
+            false => moves.append(&mut self.black_pawn_moves()),
         }
 
+        // Knight moves
+        moves.append(&mut self.knight_moves());
+
         moves
+    }
+
+    fn knight_moves(&self) -> Vec<MoveRep> {
+        todo!();
     }
 
     fn black_pawn_moves(&self) -> Vec<MoveRep> {
@@ -411,13 +429,53 @@ impl BoardState {
                 continue;
             }
 
+            // Single push
             let start = mask;
             let end = mask >> 8;
             moves.push(MoveRep {
                 starting_square: start,
                 ending_square: end,
                 promotion: None,
-            })
+            });
+            // Double push
+            let start = mask;
+            let end = mask >> 16;
+            moves.push(MoveRep {
+                starting_square: start,
+                ending_square: end,
+                promotion: None,
+            });
+        }
+        moves
+    }
+
+    fn white_pawn_moves(&self) -> Vec<MoveRep> {
+        let mut moves = Vec::new();
+
+        for shift_value in 0..64 {
+            let mask = 1 << shift_value;
+
+            // If there is no pawn there, go skip
+            if mask & self.white_pawns == 0 {
+                continue;
+            }
+
+            // Single push
+            let start = mask;
+            let end = mask << 8;
+            moves.push(MoveRep {
+                starting_square: start,
+                ending_square: end,
+                promotion: None,
+            });
+            // Double push
+            let start = mask;
+            let end = mask << 16;
+            moves.push(MoveRep {
+                starting_square: start,
+                ending_square: end,
+                promotion: None,
+            });
         }
         moves
     }
