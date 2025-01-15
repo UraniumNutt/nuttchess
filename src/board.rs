@@ -113,6 +113,24 @@ impl BoardState {
         }
     }
 
+    fn white_occupancy(&self) -> u64 {
+        self.white_pawns
+            | self.white_knights
+            | self.white_rooks
+            | self.white_bishops
+            | self.white_queens
+            | self.white_king
+    }
+
+    fn black_occupancy(&self) -> u64 {
+        self.black_pawns
+            | self.black_knights
+            | self.black_rooks
+            | self.black_bishops
+            | self.black_queens
+            | self.black_king
+    }
+
     pub fn state_from_fen<'a>(
         mut fen_tokens: impl Iterator<Item = &'a str>,
     ) -> Result<BoardState, String> {
@@ -415,7 +433,197 @@ impl BoardState {
     }
 
     fn knight_moves(&self) -> Vec<MoveRep> {
-        todo!();
+        let mut moves = Vec::new();
+
+        for shift_value in 0..64 {
+            let mask = 1 << shift_value;
+            if self.white_to_move {
+                if mask & self.white_knights != 0 {
+                    let start = mask;
+                    // case '1'
+                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
+                        let end = mask << 15;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '2'
+                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
+                        let end = mask << 6;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '3'
+                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
+                        let end = mask >> 10;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '4'
+                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
+                        let end = mask >> 17;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '5'
+                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
+                        let end = mask >> 15;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '6'
+                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
+                        let end = mask >> 6;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '7'
+                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
+                        let end = mask << 10;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '8'
+                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
+                        let end = mask << 17;
+                        if end & self.white_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                }
+            } else {
+                if mask & self.black_knights != 0 {
+                    let start = mask;
+                    // case '1'
+                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
+                        let end = mask << 15;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '2'
+                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
+                        let end = mask << 6;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '3'
+                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
+                        let end = mask >> 10;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '4'
+                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
+                        let end = mask >> 17;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '5'
+                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
+                        let end = mask >> 15;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '6'
+                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
+                        let end = mask >> 6;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '7'
+                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
+                        let end = mask << 10;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                    // case '8'
+                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
+                        let end = mask << 17;
+                        if end & self.black_occupancy() == 0 {
+                            moves.push(MoveRep {
+                                starting_square: start,
+                                ending_square: end,
+                                promotion: None,
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        moves
     }
 
     fn black_pawn_moves(&self) -> Vec<MoveRep> {
@@ -562,6 +770,56 @@ impl MoveRep {
 
         Ok(pos)
     }
+}
+
+fn rank_a(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 7;
+}
+fn rank_b(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 6;
+}
+fn rank_c(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 5;
+}
+fn rank_d(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 4;
+}
+fn rank_e(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 3;
+}
+fn rank_f(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 2;
+}
+fn rank_g(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 1;
+}
+fn rank_h(mask: u64) -> bool {
+    return mask.ilog2() % 8 == 0;
+}
+
+fn file_1(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 0;
+}
+fn file_2(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 1;
+}
+fn file_3(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 2;
+}
+fn file_4(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 3;
+}
+fn file_5(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 4;
+}
+fn file_6(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 5;
+}
+fn file_7(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 6;
+}
+fn file_8(mask: u64) -> bool {
+    return mask.ilog2() / 8 == 7;
 }
 
 fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
