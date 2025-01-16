@@ -1,201 +1,133 @@
-use crate::board::BoardState;
-use crate::uci::{EngineToGui, GuiToEngine, IdType, InfoType, OptionType, PositionType};
-use std::fs::File;
-use std::io::Write;
-
 mod board;
-mod uci;
+mod comm;
+use crate::board::*;
+use crate::comm::*;
+use rand::seq::SliceRandom;
+use std::path::Path;
 
 fn main() {
-    let mut debug_state = true;
+    // let starting_fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    // let mut board = BoardState::state_from_fen(starting_fen_string.to_owned().split(' ')).unwrap();
+    // println!("{:?}", board);
+    // board.print_board();
 
-    let mut log_file = File::options()
-        .truncate(true)
-        .write(true)
-        .create(true)
-        .open("/home/uraniumnnutt/Documents/programming/rust/nuttchess/log.txt")
-        .unwrap();
-    let mut board = BoardState::new();
+    // board.apply_move("d2d4").unwrap();
+    // println!("{:?}", board);
+    // board.print_board();
+    // board.apply_move("g8f6").unwrap();
+    // println!("{:?}", board);
+    // board.print_board();
 
-    enum BotState {
-        UCI,
-        Starting,
-        Running,
-        Finished,
-    }
+    let mut engine_input;
+    let mut running = true;
+    let mut pos_set = false;
+    let mut board = BoardState::starting_state();
+    let log_path = Path::new("log.txt");
+    let mut comm = Comm::create(log_path).unwrap();
+    while running {
+        engine_input = comm.engine_in();
 
-    let mut current_state = BotState::UCI;
+        let mut tokens = engine_input.split(" ");
 
-    loop {
-        let mut input_string = String::new();
-        std::io::stdin().read_line(&mut input_string).unwrap();
-        log_file.write_all(input_string.as_bytes()).unwrap();
-        log_file.flush().unwrap();
+        match tokens.next().unwrap() {
+            // quit
+            "quit" => {
+                running = false;
+            }
+            // uci
+            "uci" => {
+                comm.engine_out("id name nuttchess".to_string());
+                comm.engine_out("id author UraniumNutt".to_string());
+                comm.engine_out("uciok".to_string());
+            }
+            // isready
+            "isready" => {
+                comm.engine_out("readyok".to_string());
+            }
+            // ucinewgame
+            "ucinewgame" => {}
+            // position
+            "position" => match tokens.next().unwrap() {
+                "fen" => {
+                    board = match BoardState::state_from_fen(&mut tokens) {
+                        Ok(e) => e,
+                        Err(e) => {
+                            comm.engine_out(format!("Invalid fen string {}", e.to_string()));
+                            continue;
+                        }
+                    };
 
-        if input_string == "\n" || input_string.len() == 0 {
-            continue;
-        }
-        let gui_to_engine = GuiToEngine::try_from(input_string.as_str().trim());
-        match current_state {
-            BotState::UCI => match gui_to_engine {
-                Ok(GuiToEngine::Uci) => {
-                    log_file
-                        .write_all(
-                            EngineToGui::Id(IdType::Name("nuttchess".into()))
-                                .to_string()
-                                .as_bytes(),
-                        )
-                        .unwrap();
-                    println!("{}", EngineToGui::Id(IdType::Name("nuttchess".into())));
-
-                    log_file
-                        .write_all(
-                            EngineToGui::Id(IdType::Author("UraniumNutt".into()))
-                                .to_string()
-                                .as_bytes(),
-                        )
-                        .unwrap();
-                    println!("{}", EngineToGui::Id(IdType::Author("UraniumNutt".into())));
-
-                    log_file
-                        .write_all(
-                            EngineToGui::Option(OptionType::Name("Debug".into()))
-                                .to_string()
-                                .as_bytes(),
-                        )
-                        .unwrap();
-                    println!("{}", EngineToGui::Option(OptionType::Name("Debug".into())));
-
-                    log_file
-                        .write_all(EngineToGui::UciOk.to_string().as_bytes())
-                        .unwrap();
-
-                    println!("{}", EngineToGui::UciOk);
-                    current_state = BotState::Starting;
-                }
-                Err(string) => {
-                    if debug_state {
-                        log_file
-                            .write_all(
-                                EngineToGui::Info(InfoType::Str(format!(
-                                    "Unexpected input {}",
-                                    string
-                                )))
-                                .to_string()
-                                .as_bytes(),
-                            )
-                            .unwrap();
-
-                        println!(
-                            "{}",
-                            EngineToGui::Info(InfoType::Str(format!(
-                                "Unexpected input {}",
-                                string
-                            )))
-                        )
+                    match tokens.next().unwrap() {
+                        "moves" => {
+                            while let Some(chess_move) = tokens.next() {
+                                if let Err(e) = board.apply_string_move(chess_move) {
+                                    comm.engine_out(format!(
+                                        "Error applying move: {}",
+                                        e.to_string()
+                                    ));
+                                }
+                            }
+                            pos_set = true;
+                            // print for testing
+                            // board.print_board();
+                        }
+                        e => comm.engine_out(format!("Unexpected token {}", e)),
                     }
                 }
-                _ => continue,
+                "startpos" => match tokens.next().unwrap() {
+                    "moves" => {
+                        board = BoardState::starting_state();
+                        while let Some(chess_move) = tokens.next() {
+                            if let Err(e) = board.apply_string_move(chess_move) {
+                                comm.engine_out(format!("Error applying move: {}", e.to_string()));
+                            }
+                        }
+                        pos_set = true;
+                        // print for testing
+                        // board.print_board();
+                    }
+                    e => comm.engine_out(format!("Unexpected token {}", e)),
+                },
+                e => comm.engine_out(format!("Unexpected token {}", e)),
             },
-            BotState::Starting => match gui_to_engine {
-                Ok(GuiToEngine::IsReady) => {
-                    log_file
-                        .write_all(EngineToGui::ReadyOk.to_string().as_bytes())
-                        .unwrap();
-
-                    println!("{}", EngineToGui::ReadyOk)
-                }
-                Ok(GuiToEngine::Quit) => break,
-
-                Ok(GuiToEngine::UciNewGame) => {
-                    current_state = BotState::Running;
+            "go" => {
+                if !pos_set {
+                    comm.engine_out("No position set".to_string());
                     continue;
                 }
-                Err(string) => {
-                    if debug_state {
-                        log_file
-                            .write_all(
-                                EngineToGui::Info(InfoType::Str(format!(
-                                    "Unexpected input {}",
-                                    string
-                                )))
-                                .to_string()
-                                .as_bytes(),
-                            )
-                            .unwrap();
-                        println!(
-                            "{}",
-                            EngineToGui::Info(InfoType::Str(format!(
-                                "Unexpected input {}",
-                                string
-                            )))
-                        )
+
+                match tokens.next().unwrap() {
+                    "perft" => {
+                        if let Some(digit_string) = tokens.next() {
+                            // Do the perft at this depth
+                            if let Ok(digit) = digit_string.parse::<u64>() {
+                                let tree = board.search(digit).unwrap();
+                                let leaf_nodes = tree.get_leaf_nodes();
+                                comm.engine_out(format!("Number of nodes: {}", leaf_nodes));
+                            } else {
+                                comm.engine_out(format!(
+                                    "Invalid value for depth {}",
+                                    digit_string
+                                ));
+                            }
+                        } else {
+                            comm.engine_out("Expected depth token".to_string());
+                        }
                     }
-                }
-                _ => continue,
-            },
-
-            BotState::Running => match gui_to_engine {
-                Ok(GuiToEngine::Position(position_type)) => match position_type {
-                    PositionType::FenString(_) => {
-                        board::board_state_from_pos(&position_type);
+                    "wtime" => {
+                        // TODO make this not temporary
+                        // comm.engine_out("bestmove d7d5".to_string());
+                        let moves = board.generate_moves();
+                        let randmove = moves.choose(&mut rand::thread_rng()).unwrap();
+                        let move_string = randmove.to_string().unwrap();
+                        comm.engine_out(format!("bestmove {}", move_string));
                     }
-                    PositionType::StartPos(_) => {
-                        board::board_state_from_pos(&position_type);
-                    }
-                },
-
-                Ok(GuiToEngine::IsReady) => {
-                    log_file
-                        .write_all(EngineToGui::ReadyOk.to_string().as_bytes())
-                        .unwrap();
-                    println!("{}", EngineToGui::ReadyOk)
+                    e => comm.engine_out(format!("Unrecognized token {}", e)),
                 }
-
-                Ok(GuiToEngine::Go) => {
-                    // println!(
-                    //     "{}",
-                    //     EngineToGui::Info(InfoType::Str(format!("{:?}", board)))
-                    // );
-                    // log::log();
-
-                    log_file
-                        .write_all("bestmove d7d5".to_string().as_bytes())
-                        .unwrap();
-                    println!("bestmove d7d5");
-                }
-
-                Ok(GuiToEngine::Quit) => {
-                    // current_state = BotState::Finished;
-                    // continue;
-                    break;
-                }
-                Err(string) => {
-                    if debug_state {
-                        log_file
-                            .write_all(
-                                EngineToGui::Info(InfoType::Str(format!(
-                                    "Unexpected input {}",
-                                    string
-                                )))
-                                .to_string()
-                                .as_bytes(),
-                            )
-                            .unwrap();
-                        println!(
-                            "{}",
-                            EngineToGui::Info(InfoType::Str(format!(
-                                "Unexpected input {}",
-                                string
-                            )))
-                        )
-                    }
-                }
-                _ => continue,
-            },
-
-            BotState::Finished => {
-                break;
+            }
+            // If the option is not recognized
+            e => {
+                comm.engine_out(format!("Unknown option {}", e));
             }
         }
     }

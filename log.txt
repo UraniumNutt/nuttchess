@@ -1,8 +1,0 @@
-uci
-id name nuttchessid author UraniumNuttoption name Debuguciokisready
-readyokucinewgame
-posistion startpos d2d4
-info string Unexpected input Invalid input posistion startpos d2d4posistion startpos moves d2d4
-info string Unexpected input Invalid input posistion startpos moves d2d4position startpos moves d2d4
-quite
-info string Unexpected input Invalid input quitequit
