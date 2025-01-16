@@ -419,12 +419,12 @@ impl BoardState {
         let mut moves = Vec::new();
 
         // Generate pawn moves
-        match self.white_to_move {
-            // white pawns
-            true => moves.append(&mut self.white_pawn_moves()),
-            // black pawns
-            false => moves.append(&mut self.black_pawn_moves()),
-        }
+        // match self.white_to_move {
+        //     // white pawns
+        //     true => moves.append(&mut self.white_pawn_moves()),
+        //     // black pawns
+        //     false => moves.append(&mut self.black_pawn_moves()),
+        // }
 
         // Knight moves
         moves.append(&mut self.knight_moves());
