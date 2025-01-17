@@ -1,3 +1,5 @@
+use std::process::Output;
+
 #[derive(Debug, Copy, Clone)]
 pub struct BoardState {
     white_pawns: u64,
@@ -113,23 +115,7 @@ impl BoardState {
         }
     }
 
-    fn white_occupancy(&self) -> u64 {
-        self.white_pawns
-            | self.white_knights
-            | self.white_rooks
-            | self.white_bishops
-            | self.white_queens
-            | self.white_king
-    }
-
-    fn black_occupancy(&self) -> u64 {
-        self.black_pawns
-            | self.black_knights
-            | self.black_rooks
-            | self.black_bishops
-            | self.black_queens
-            | self.black_king
-    }
+    pub fn print_board(&self) {}
 
     pub fn state_from_fen<'a>(
         mut fen_tokens: impl Iterator<Item = &'a str>,
@@ -386,348 +372,6 @@ impl BoardState {
         state.white_to_move = !state.white_to_move;
         Ok(state)
     }
-
-    pub fn search(self, depth: u64) -> Option<TreeNode> {
-        if depth == 0 {
-            return None;
-        }
-
-        let mut children: Vec<TreeNode> = vec![];
-        let child_moves = self.generate_moves();
-        for child_move in child_moves {
-            let child_node = self.apply_move(&child_move).unwrap().search(depth - 1);
-            let node = TreeNode {
-                board_state: self.apply_move(&child_move).unwrap(),
-                applied_move: Some(child_move),
-                children: match child_node {
-                    Some(e) => e.children,
-                    None => vec![],
-                },
-            };
-            children.push(node);
-        }
-        let tree = TreeNode {
-            board_state: self,
-            applied_move: None,
-            children: children,
-        };
-        Some(tree)
-    }
-
-    // generate the moves from a given position
-    pub fn generate_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
-
-        // Generate pawn moves
-        // match self.white_to_move {
-        //     // white pawns
-        //     true => moves.append(&mut self.white_pawn_moves()),
-        //     // black pawns
-        //     false => moves.append(&mut self.black_pawn_moves()),
-        // }
-
-        // Knight moves
-        moves.append(&mut self.knight_moves());
-
-        moves
-    }
-
-    fn knight_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
-
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
-            if self.white_to_move {
-                if mask & self.white_knights != 0 {
-                    let start = mask;
-                    // case '1'
-                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 15;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '2'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
-                        let end = mask << 6;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '3'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
-                        let end = mask >> 10;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '4'
-                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 17;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '5'
-                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 15;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '6'
-                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
-                        let end = mask >> 6;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '7'
-                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
-                        let end = mask << 10;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '8'
-                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 17;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                }
-            } else {
-                if mask & self.black_knights != 0 {
-                    let start = mask;
-                    // case '1'
-                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 15;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '2'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
-                        let end = mask << 6;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '3'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
-                        let end = mask >> 10;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '4'
-                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 17;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '5'
-                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 15;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '6'
-                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
-                        let end = mask >> 6;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '7'
-                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
-                        let end = mask << 10;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '8'
-                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 17;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                }
-            }
-        }
-        moves
-    }
-
-    fn black_pawn_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
-
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
-
-            // If there is no pawn there, go skip
-            if mask & self.black_pawns == 0 {
-                continue;
-            }
-
-            // Single push
-            let start = mask;
-            let end = mask >> 8;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-            // Double push
-            let start = mask;
-            let end = mask >> 16;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-        }
-        moves
-    }
-
-    fn white_pawn_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
-
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
-
-            // If there is no pawn there, go skip
-            if mask & self.white_pawns == 0 {
-                continue;
-            }
-
-            // Single push
-            let start = mask;
-            let end = mask << 8;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-            // Double push
-            let start = mask;
-            let end = mask << 16;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-        }
-        moves
-    }
-
-    pub fn apply_string_move(&self, chess_move: &str) -> Result<BoardState, String> {
-        // Get a bitboard mask of the starting move
-        let start_mask = position_to_mask(
-            chess_move.chars().nth(0).unwrap(),
-            chess_move.chars().nth(1).unwrap(),
-        )
-        .unwrap();
-        // Get a bitboard mask of the ending move
-        let end_mask = position_to_mask(
-            chess_move.chars().nth(2).unwrap(),
-            chess_move.chars().nth(3).unwrap(),
-        )
-        .unwrap();
-
-        let play = MoveRep {
-            starting_square: start_mask,
-            ending_square: end_mask,
-            promotion: None,
-        };
-
-        self.apply_move(&play)
-    }
-
-    pub fn print_board(&self) {
-        println!("{:#018x}: white pawns", self.white_pawns);
-        println!("{:#018x}: white knights", self.white_knights);
-        println!("{:#018x}: white bishops", self.white_bishops);
-        println!("{:#018x}: white rooks", self.white_rooks);
-        println!("{:#018x}: white queens", self.white_queens);
-        println!("{:#018x}: white king", self.white_king);
-
-        println!("{:#018x}: black pawns", self.black_pawns);
-        println!("{:#018x}: black knights", self.black_knights);
-        println!("{:#018x}: black bishops", self.black_bishops);
-        println!("{:#018x}: black rooks", self.black_rooks);
-        println!("{:#018x}: black queens", self.black_queens);
-        println!("{:#018x}: black king", self.black_king);
-
-        println!("{:#018x}: en passant target", self.en_passant_target);
-    }
 }
 
 impl MoveRep {
@@ -772,56 +416,6 @@ impl MoveRep {
     }
 }
 
-fn rank_a(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 7;
-}
-fn rank_b(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 6;
-}
-fn rank_c(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 5;
-}
-fn rank_d(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 4;
-}
-fn rank_e(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 3;
-}
-fn rank_f(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 2;
-}
-fn rank_g(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 1;
-}
-fn rank_h(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 0;
-}
-
-fn file_1(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 0;
-}
-fn file_2(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 1;
-}
-fn file_3(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 2;
-}
-fn file_4(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 3;
-}
-fn file_5(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 4;
-}
-fn file_6(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 5;
-}
-fn file_7(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 6;
-}
-fn file_8(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 7;
-}
-
 fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
     let file_shift = match file {
         'h' => 0,
@@ -841,4 +435,110 @@ fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
         return Err(format!("Unrecognized value \"{}\" found in rank", rank));
     }
     Ok((1 << file_shift) << ((rank_shift - 1) * 8))
+}
+
+pub fn print_bitboard(bb: u64) {
+    fn get_bit(bb: u64, index: u64) -> char {
+        match bb & 1 << index {
+            0 => '0',
+            _ => '1',
+        }
+    }
+    println!(
+        "8   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 63),
+        get_bit(bb, 62),
+        get_bit(bb, 61),
+        get_bit(bb, 60),
+        get_bit(bb, 59),
+        get_bit(bb, 58),
+        get_bit(bb, 57),
+        get_bit(bb, 56)
+    );
+
+    println!(
+        "7   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 55),
+        get_bit(bb, 54),
+        get_bit(bb, 53),
+        get_bit(bb, 52),
+        get_bit(bb, 51),
+        get_bit(bb, 50),
+        get_bit(bb, 49),
+        get_bit(bb, 48)
+    );
+
+    println!(
+        "6   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 47),
+        get_bit(bb, 46),
+        get_bit(bb, 45),
+        get_bit(bb, 44),
+        get_bit(bb, 43),
+        get_bit(bb, 42),
+        get_bit(bb, 41),
+        get_bit(bb, 40)
+    );
+
+    println!(
+        "5   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 39),
+        get_bit(bb, 38),
+        get_bit(bb, 37),
+        get_bit(bb, 36),
+        get_bit(bb, 35),
+        get_bit(bb, 34),
+        get_bit(bb, 33),
+        get_bit(bb, 32)
+    );
+
+    println!(
+        "4   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 31),
+        get_bit(bb, 30),
+        get_bit(bb, 29),
+        get_bit(bb, 28),
+        get_bit(bb, 27),
+        get_bit(bb, 26),
+        get_bit(bb, 25),
+        get_bit(bb, 24)
+    );
+
+    println!(
+        "3   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 23),
+        get_bit(bb, 22),
+        get_bit(bb, 21),
+        get_bit(bb, 20),
+        get_bit(bb, 19),
+        get_bit(bb, 18),
+        get_bit(bb, 17),
+        get_bit(bb, 16)
+    );
+
+    println!(
+        "2   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 15),
+        get_bit(bb, 14),
+        get_bit(bb, 13),
+        get_bit(bb, 12),
+        get_bit(bb, 11),
+        get_bit(bb, 10),
+        get_bit(bb, 9),
+        get_bit(bb, 8)
+    );
+
+    println!(
+        "1   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 7),
+        get_bit(bb, 6),
+        get_bit(bb, 5),
+        get_bit(bb, 4),
+        get_bit(bb, 3),
+        get_bit(bb, 2),
+        get_bit(bb, 1),
+        get_bit(bb, 0)
+    );
+
+    println!("\n    a b c d e f g h");
 }
