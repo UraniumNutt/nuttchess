@@ -106,10 +106,12 @@ pub struct Tables {
     pub white_pawn_push: [u64; 64],
     pub black_pawn_push: [u64; 64],
     pub knight_attacks: [u64; 64],
-    pub rook_attacks: [u64; 64],
-    pub bishop_attacks: [u64; 64],
-    pub queen_attacks: [u64; 64],
+    pub rook_occupancy: [u64; 64],
+    pub bishop_occupancy: [u64; 64],
+    pub queen_occupancy: [u64; 64],
     pub king_attacks: [u64; 64],
+    pub relevent_rook_count: [u64; 64],
+    pub relevent_bishop_count: [u64; 64],
 }
 
 impl Tables {
@@ -120,18 +122,24 @@ impl Tables {
         let mut white_pawn_push: [u64; 64] = [0; 64];
         let mut black_pawn_push: [u64; 64] = [0; 64];
         let mut knight_attacks: [u64; 64] = [0; 64];
-        let mut rook_attacks: [u64; 64] = [0; 64];
-        let mut bishop_attacks: [u64; 64] = [0; 64];
-        let mut queen_attacks: [u64; 64] = [0; 64];
+        let mut rook_occupancy: [u64; 64] = [0; 64];
+        let mut bishop_occupancy: [u64; 64] = [0; 64];
+        let mut queen_occupancy: [u64; 64] = [0; 64];
         let mut king_attacks: [u64; 64] = [0; 64];
+        let mut relevent_rook_count: [u64; 64] = [0; 64];
+        let mut relevent_bishop_count: [u64; 64] = [0; 64];
 
         // Do the generation logic here
         Tables::generate_white_pawn_push(&mut white_pawn_push);
         Tables::generate_black_pawn_push(&mut black_pawn_push);
-        Tables::generate_king_attacks(&mut king_attacks);
-        Tables::generate_knight_attacks(&mut knight_attacks);
         Tables::generate_white_pawn_attacks(&mut white_pawn_attacks);
         Tables::generate_black_pawn_attacks(&mut black_pawn_attacks);
+        Tables::generate_king_attacks(&mut king_attacks);
+        Tables::generate_knight_attacks(&mut knight_attacks);
+        Tables::generate_rook_occupancy_mask(&mut rook_occupancy);
+        Tables::generate_bishop_occupancy_mask(&mut bishop_occupancy);
+        Tables::generate_count_table(&mut relevent_rook_count, rook_occupancy);
+        Tables::generate_count_table(&mut relevent_bishop_count, bishop_occupancy);
         // Now return the struct
         Tables {
             white_pawn_attacks,
@@ -139,10 +147,12 @@ impl Tables {
             white_pawn_push,
             black_pawn_push,
             knight_attacks,
-            rook_attacks,
-            bishop_attacks,
-            queen_attacks,
+            rook_occupancy,
+            bishop_occupancy,
+            queen_occupancy,
             king_attacks,
+            relevent_rook_count,
+            relevent_bishop_count,
         }
     }
 
@@ -291,5 +301,223 @@ impl Tables {
                 table[shift_value] |= 1 << (shift_value + 17);
             }
         }
+    }
+
+    // Get the occupancy mask for the rooks
+    fn generate_rook_occupancy_mask(table: &mut [u64; 64]) {
+        for shift_value in 0..64 {
+            let rank = shift_value / 8; // the number
+            let file = shift_value % 8; // the letter
+
+            // North
+            for loop_rank in (rank + 1)..7 {
+                table[shift_value] |= 1 << Tables::rf_to_index(loop_rank, file);
+            }
+            // East
+            for loop_file in 1..file {
+                table[shift_value] |= 1 << Tables::rf_to_index(rank, loop_file);
+            }
+            // South
+            for loop_rank in 1..rank {
+                table[shift_value] |= 1 << Tables::rf_to_index(loop_rank, file);
+            }
+            // West
+            for loop_file in (file + 1)..7 {
+                table[shift_value] |= 1 << Tables::rf_to_index(rank, loop_file);
+            }
+        }
+    }
+
+    // Calculate the relevent occupancy mask for the rooks
+    pub fn calculate_relevent_rook_occupancy(index: usize, blockers: u64) -> u64 {
+        let rank = index / 8;
+        let file = index % 8;
+        let mut relevent = 0;
+
+        // North
+        for loop_rank in (rank + 1)..7 {
+            let mask = 1 << Tables::rf_to_index(loop_rank, file);
+            if mask & blockers != 0 {
+                relevent |= mask;
+                break;
+            }
+        }
+        // East
+        for loop_file in 1..file {
+            let mask = 1 << Tables::rf_to_index(rank, loop_file);
+            if mask & blockers != 0 {
+                relevent |= mask;
+                break;
+            }
+        }
+        // South
+        for loop_rank in 1..rank {
+            let mask = 1 << Tables::rf_to_index(loop_rank, file);
+            if mask & blockers != 0 {
+                relevent |= mask;
+                break;
+            }
+        }
+        // West
+        for loop_file in (file + 1)..7 {
+            let mask = 1 << Tables::rf_to_index(rank, loop_file);
+            if mask & blockers != 0 {
+                relevent |= mask;
+                break;
+            }
+        }
+        relevent
+    }
+
+    // Get the occupancy mask for the bishops
+    fn generate_bishop_occupancy_mask(table: &mut [u64; 64]) {
+        for shift_value in 0..64 {
+            let rank = shift_value / 8;
+            let file = shift_value % 8;
+            let mask = 1 << shift_value;
+
+            // North east
+            if mask & FILE_H == 0 {
+                let mut rank_loop = rank + 1;
+                let mut file_loop = file - 1;
+                while rank_loop < 7 && file_loop > 0 {
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    rank_loop += 1;
+                    file_loop -= 1;
+                }
+            }
+            // South east
+            if mask & FILE_H == 0 && mask & RANK_1 == 0 {
+                let mut rank_loop = rank - 1;
+                let mut file_loop = file - 1;
+                while rank_loop > 0 && file_loop > 0 {
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    rank_loop -= 1;
+                    file_loop -= 1;
+                }
+            }
+            // South west
+            if mask & RANK_1 == 0 {
+                let mut rank_loop = rank - 1;
+                let mut file_loop = file + 1;
+                while rank_loop > 0 && file_loop < 7 {
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    rank_loop -= 1;
+                    file_loop += 1;
+                }
+            }
+            // North west
+            let mut rank_loop = rank + 1;
+            let mut file_loop = file + 1;
+            while rank_loop < 7 && file_loop < 7 {
+                table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                rank_loop += 1;
+                file_loop += 1;
+            }
+        }
+    }
+
+    // Calculate the relevent occupancy mask for the bishops
+    pub fn calculate_relevent_bishops_occupancy(index: usize, blockers: u64) -> u64 {
+        let rank = index / 8;
+        let file = index % 8;
+        let mask = 1 << index;
+        let mut relevent = 0;
+
+        // North east
+        if mask & FILE_H == 0 {
+            let mut rank_loop = rank + 1;
+            let mut file_loop = file - 1;
+            while rank_loop < 7 && file_loop > 0 {
+                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+                if loop_mask & blockers != 0 {
+                    relevent |= loop_mask;
+                    break;
+                }
+                rank_loop += 1;
+                file_loop -= 1;
+            }
+        }
+        // South east
+        if mask & FILE_H == 0 && mask & RANK_1 == 0 {
+            let mut rank_loop = rank - 1;
+            let mut file_loop = file - 1;
+            while rank_loop > 0 && file_loop > 0 {
+                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+                if loop_mask & blockers != 0 {
+                    relevent |= loop_mask;
+                    break;
+                }
+                rank_loop -= 1;
+                file_loop -= 1;
+            }
+        }
+        // South west
+        if mask & RANK_1 == 0 {
+            let mut rank_loop = rank - 1;
+            let mut file_loop = file + 1;
+            while rank_loop > 0 && file_loop < 7 {
+                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+                if loop_mask & blockers != 0 {
+                    relevent |= loop_mask;
+                    break;
+                }
+                rank_loop -= 1;
+                file_loop += 1;
+            }
+        }
+        // North west
+        let mut rank_loop = rank + 1;
+        let mut file_loop = file + 1;
+        while rank_loop < 7 && file_loop < 7 {
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            rank_loop += 1;
+            file_loop += 1;
+        }
+
+        relevent
+    }
+
+    // Generate a table of the counts based on the bit count of the masks
+    fn generate_count_table(table: &mut [u64; 64], occupancy_masks: [u64; 64]) {
+        for shift_value in 0..64 {
+            table[shift_value] = occupancy_masks[shift_value].count_ones() as u64;
+        }
+    }
+
+    // Sets the bits of the mask to the bits of the number from least to most significant
+    pub fn map_number_to_occupancy(mut number: u64, occupancy: u64) -> u64 {
+        let mut mapped = 0;
+
+        for shift_value in 0..64 {
+            if occupancy & (1 << shift_value) != 0 {
+                let bit = match number & 1 {
+                    0 => 0,
+                    _ => 1,
+                };
+                number >>= 1;
+                mapped |= bit << shift_value;
+            }
+        }
+
+        mapped
+    }
+
+    // Maps the rank and file to the index
+    const fn rf_to_index(rank: usize, file: usize) -> u64 {
+        (file + 8 * rank) as u64
+    }
+
+    // Gets the index of the least significant 1
+    pub fn get_index(bb: u64) -> i64 {
+        if bb == 0 {
+            return -1;
+        }
+
+        (bb & !bb + 1).ilog2() as i64
     }
 }

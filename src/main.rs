@@ -25,6 +25,6 @@ fn main() {
     // let log_path = Path::new("log.txt");
     // let mut comm = Comm::create(log_path).unwrap();
     let test = Tables::new();
-    board::print_bitboard(test.black_pawn_attacks[36]);
+    // board::print_bitboard(bishops);
     // while running {}
 }
