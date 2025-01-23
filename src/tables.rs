@@ -507,6 +507,38 @@ impl Tables {
         mapped
     }
 
+    // get the magic number for the table at the given index
+    // pub fn get_rooks_magic_number(square: u64, table: &[u64; 64]) -> u64 {
+    //     let mut occupancies = [0; 4096];
+    //     let mut attacks = [0; 4096];
+    //     let mut used_attack = [0; 4096];
+    //     let attack_mask = table[square as usize];
+    //     let occupancy_size = 1 << attack_mask.count_ones();
+
+    //     // Init the occupancies and attacks
+    //     for index in 0..occupancy_size {
+    //         occupancies[index] = Tables::map_number_to_occupancy(index as u64, attack_mask);
+    //         attacks[index] = Tables::calculate_relevent_rook_occupancy(index, attack_mask);
+    //     }
+
+    //     let mut found_magic = false;
+    //     while !found_magic {
+    //         for pattern in 0..occupancy_size {
+    //             let possible_magic = Tables::get_random_u64();
+    //         }
+    //     }
+    // }
+
+    fn apply_magic_hash(magic: u64, mask: u64) -> u64 {
+        (mask * magic) >> (64 - mask.count_ones())
+    }
+
+    fn get_random_u64() -> u64 {
+        let low = rand::random::<u32>();
+        let high = rand::random::<u32>();
+        (high as u64) << 32 | low as u64
+    }
+
     // Maps the rank and file to the index
     const fn rf_to_index(rank: usize, file: usize) -> u64 {
         (file + 8 * rank) as u64
