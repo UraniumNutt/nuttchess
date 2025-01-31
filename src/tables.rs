@@ -1,5 +1,13 @@
 // constants for board indicies
 
+use std::process::Output;
+
+use rand::seq::index;
+use rand_core::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
+
+use crate::print_bitboard;
+
 // rank 1
 pub const A1: u64 = 7;
 pub const B1: u64 = 6;
@@ -113,7 +121,6 @@ pub struct Tables {
     pub relevent_rook_count: [u64; 64],
     pub relevent_bishop_count: [u64; 64],
 }
-
 impl Tables {
     pub fn new() -> Tables {
         // Init the tables
@@ -140,6 +147,7 @@ impl Tables {
         Tables::generate_bishop_occupancy_mask(&mut bishop_occupancy);
         Tables::generate_count_table(&mut relevent_rook_count, rook_occupancy);
         Tables::generate_count_table(&mut relevent_bishop_count, bishop_occupancy);
+
         // Now return the struct
         Tables {
             white_pawn_attacks,
@@ -507,36 +515,69 @@ impl Tables {
         mapped
     }
 
-    // get the magic number for the table at the given index
-    // pub fn get_rooks_magic_number(square: u64, table: &[u64; 64]) -> u64 {
-    //     let mut occupancies = [0; 4096];
-    //     let mut attacks = [0; 4096];
-    //     let mut used_attack = [0; 4096];
-    //     let attack_mask = table[square as usize];
-    //     let occupancy_size = 1 << attack_mask.count_ones();
+    // Generate a magic number
+    pub fn generate_magic(
+        attack_mask: u64,
+        square_index: usize,
+        bit_count: u64,
+        calculate_relevent: &dyn Fn(usize, u64) -> u64,
+    ) -> u64 {
+        // let bit_count = attack_mask.count_ones() as u64;
+        // The number of permutations of occupancies
+        let attack_permutations = 1 << bit_count;
+        // The permutations of occupancies
+        let mut occupancies = [0; 4096];
 
-    //     // Init the occupancies and attacks
-    //     for index in 0..occupancy_size {
-    //         occupancies[index] = Tables::map_number_to_occupancy(index as u64, attack_mask);
-    //         attacks[index] = Tables::calculate_relevent_rook_occupancy(index, attack_mask);
-    //     }
+        // Init the occupancies
+        for index in 0..attack_permutations {
+            occupancies[index] = Tables::map_number_to_occupancy(index as u64, attack_mask);
+        }
 
-    //     let mut found_magic = false;
-    //     while !found_magic {
-    //         for pattern in 0..occupancy_size {
-    //             let possible_magic = Tables::get_random_u64();
-    //         }
-    //     }
-    // }
+        // Make a xorshift
+        let mut rng = XorShiftRng::seed_from_u64(0);
+        // Run until we get a good magic
+        let mut found_magic = false;
 
-    fn apply_magic_hash(magic: u64, mask: u64) -> u64 {
-        (mask * magic) >> (64 - mask.count_ones())
+        loop {
+            // Start to apply the hash to see if it works
+            let magic = Tables::get_possible_magic(&mut rng);
+            if ((magic.wrapping_mul(attack_mask)) & 0xFF00000000000000).count_ones() < 6 {
+                continue;
+            }
+            // Stores the relevent occupancies generated
+            let mut relevent_occupancies = [0; 4096];
+            found_magic = true;
+            for index in 0..attack_permutations {
+                // Apply the hash
+                let hash = Tables::apply_magic_hash(magic, bit_count, occupancies[index]);
+                let relevent_blockers = calculate_relevent(square_index, occupancies[index]);
+                // If the relevent occupancies at the hash is zero, set it to the calculated occupancy
+                if relevent_occupancies[hash as usize] == 0 {
+                    relevent_occupancies[hash as usize] = relevent_blockers;
+                // If it is not zero, then it has to contain the same relevent occupancies
+                } else if relevent_occupancies[hash as usize] != relevent_blockers {
+                    found_magic = false;
+                    break;
+                }
+            }
+            // If true, then the magic works
+            if found_magic {
+                return magic;
+            }
+        }
     }
 
-    fn get_random_u64() -> u64 {
-        let low = rand::random::<u32>();
-        let high = rand::random::<u32>();
-        (high as u64) << 32 | low as u64
+    fn apply_magic_hash(magic: u64, bit_count: u64, mask: u64) -> u64 {
+        mask.wrapping_mul(magic) >> (64 - bit_count)
+    }
+
+    fn get_random_u64(rng: &mut XorShiftRng) -> u64 {
+        rng.next_u64()
+    }
+
+    // Get a number that is likely to be a magic
+    pub fn get_possible_magic(rng: &mut XorShiftRng) -> u64 {
+        Tables::get_random_u64(rng) & Tables::get_random_u64(rng) & Tables::get_random_u64(rng)
     }
 
     // Maps the rank and file to the index
