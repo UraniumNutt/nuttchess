@@ -343,36 +343,44 @@ impl Tables {
         let mut relevent = 0;
 
         // North
-        for loop_rank in (rank + 1)..7 {
+        let mut loop_rank = rank + 1;
+        while loop_rank < 7 {
             let mask = 1 << Tables::rf_to_index(loop_rank, file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
+            loop_rank += 1;
         }
         // East
-        for loop_file in 1..file {
+        let mut loop_file = 1;
+        while loop_file < file {
             let mask = 1 << Tables::rf_to_index(rank, loop_file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
+            loop_file += 1;
         }
         // South
-        for loop_rank in 1..rank {
+        let mut loop_rank = 1;
+        while loop_rank < rank {
             let mask = 1 << Tables::rf_to_index(loop_rank, file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
+            loop_rank += 1;
         }
         // West
-        for loop_file in (file + 1)..7 {
+        let mut loop_file = file + 1;
+        while loop_file < 7 {
             let mask = 1 << Tables::rf_to_index(rank, loop_file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
+            loop_file += 1;
         }
         relevent
     }
