@@ -1,6 +1,5 @@
 use std::process::Output;
 
-#[derive(Debug, Copy, Clone)]
 pub struct BoardState {
     white_pawns: u64,
     white_knights: u64,
@@ -24,9 +23,9 @@ pub struct BoardState {
     en_passant_target: u64,
     reversable_move_counter: u8,
     fullmove_counter: u16,
+    move_stack: Vec<MoveStackFrame>,
 }
 
-#[derive(Copy, Clone)]
 pub struct MoveRep {
     starting_square: u64,
     ending_square: u64,
@@ -39,6 +38,32 @@ enum Promotion {
     Bishop,
     Rook,
     Knight,
+}
+
+// Stores state of the board which can not be recovered when unmaking a move
+#[derive(Copy, Clone)]
+pub struct MoveStackFrame {
+    en_passant_target: u64,
+    reversable_move_counter: u8,
+    fullmove_counter: u16,
+    white_queenside_castle_rights: bool,
+    white_kingside_castle_rights: bool,
+    black_queenside_castle_rights: bool,
+    black_kingside_castle_rights: bool,
+}
+
+impl MoveStackFrame {
+    fn new() -> MoveStackFrame {
+        MoveStackFrame {
+            en_passant_target: 0,
+            reversable_move_counter: 0,
+            fullmove_counter: 0,
+            white_queenside_castle_rights: true,
+            white_kingside_castle_rights: true,
+            black_queenside_castle_rights: true,
+            black_kingside_castle_rights: true,
+        }
+    }
 }
 
 pub struct TreeNode {
@@ -85,6 +110,7 @@ impl BoardState {
             en_passant_target: 0x0,
             reversable_move_counter: 0,
             fullmove_counter: 0,
+            move_stack: vec![MoveStackFrame::new(); 0],
         }
     }
 
@@ -112,6 +138,7 @@ impl BoardState {
             en_passant_target: 0,
             reversable_move_counter: 0,
             fullmove_counter: 0,
+            move_stack: vec![MoveStackFrame::new(); 0],
         }
     }
 
@@ -276,98 +303,6 @@ impl BoardState {
             return Err("String does not have enough tokens to be a valid fen string".to_string());
         }
 
-        Ok(state)
-    }
-
-    pub fn apply_move(&self, play: &MoveRep) -> Result<BoardState, String> {
-        // Clear the starting posisition, and set then ending posistion
-        let (start_mask, end_mask, promotion) =
-            (&play.starting_square, &play.ending_square, &play.promotion);
-        let mut state = self.to_owned();
-        match start_mask {
-            // White
-
-            // Pawns
-            e if e & state.white_pawns != 0 => {
-                state.white_pawns &= !e;
-                state.white_pawns |= end_mask;
-            }
-
-            // Knights
-            e if e & state.white_knights != 0 => {
-                state.white_knights &= !e;
-                state.white_knights |= end_mask;
-            }
-
-            // Biships
-            e if e & state.white_bishops != 0 => {
-                state.white_bishops &= !e;
-                state.white_bishops |= end_mask;
-            }
-
-            // Rooks
-            e if e & state.white_rooks != 0 => {
-                state.white_rooks &= !e;
-                state.white_rooks |= end_mask;
-            }
-
-            // Queens
-            e if e & state.white_queens != 0 => {
-                state.white_queens &= !e;
-                state.white_queens |= end_mask;
-            }
-
-            // Kings
-            e if e & state.white_king != 0 => {
-                state.white_king &= !e;
-                state.white_king |= end_mask;
-            }
-
-            // Black
-
-            // Pawns
-            e if e & state.black_pawns != 0 => {
-                state.black_pawns &= !e;
-                state.black_pawns |= end_mask;
-            }
-
-            // Knights
-            e if e & state.black_knights != 0 => {
-                state.black_knights &= !e;
-                state.black_knights |= end_mask;
-            }
-
-            // Biships
-            e if e & state.black_bishops != 0 => {
-                state.black_bishops &= !e;
-                state.black_bishops |= end_mask;
-            }
-
-            // Rooks
-            e if e & state.black_rooks != 0 => {
-                state.black_rooks &= !e;
-                state.black_rooks |= end_mask;
-            }
-
-            // Queens
-            e if e & state.black_queens != 0 => {
-                state.black_queens &= !e;
-                state.black_queens |= end_mask;
-            }
-
-            // Kings
-            e if e & state.black_king != 0 => {
-                state.black_king &= !e;
-                state.black_king |= end_mask;
-            }
-
-            // TODO implement some formating so we can print the play
-            // _ => return Err(format!("No piece for move {}", play)),
-            _ => return Err("No target piece found".to_string()),
-        }
-
-        // Before returning, change the side to move
-        state.white_to_move = !state.white_to_move;
         Ok(state)
     }
 }
