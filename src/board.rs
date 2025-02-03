@@ -1,43 +1,72 @@
 use std::process::Output;
 
+#[derive(Clone)]
 pub struct BoardState {
-    white_pawns: u64,
-    white_knights: u64,
-    white_rooks: u64,
-    white_bishops: u64,
-    white_queens: u64,
-    white_king: u64,
-    white_queenside_castle_rights: bool,
-    white_kingside_castle_rights: bool,
+    pub white_pawns: u64,
+    pub white_knights: u64,
+    pub white_rooks: u64,
+    pub white_bishops: u64,
+    pub white_queens: u64,
+    pub white_king: u64,
+    pub white_queenside_castle_rights: bool,
+    pub white_kingside_castle_rights: bool,
 
-    black_pawns: u64,
-    black_knights: u64,
-    black_rooks: u64,
-    black_bishops: u64,
-    black_queens: u64,
-    black_king: u64,
-    black_queenside_castle_rights: bool,
-    black_kingside_castle_rights: bool,
+    pub black_pawns: u64,
+    pub black_knights: u64,
+    pub black_rooks: u64,
+    pub black_bishops: u64,
+    pub black_queens: u64,
+    pub black_king: u64,
+    pub black_queenside_castle_rights: bool,
+    pub black_kingside_castle_rights: bool,
 
-    white_to_move: bool,
-    en_passant_target: u64,
-    reversable_move_counter: u8,
-    fullmove_counter: u16,
-    move_stack: Vec<MoveStackFrame>,
+    pub white_to_move: bool,
+    pub en_passant_target: u64,
+    pub reversable_move_counter: u8,
+    pub fullmove_counter: u16,
+    pub move_stack: Vec<MoveStackFrame>,
+    pub move_stack_pointer: usize,
 }
 
 pub struct MoveRep {
     starting_square: u64,
     ending_square: u64,
     promotion: Option<Promotion>,
+    piece_hint: PieceHint,
+}
+
+impl MoveRep {
+    pub fn new(
+        starting_square: u64,
+        ending_square: u64,
+        promotion: Option<Promotion>,
+        piece_hint: PieceHint,
+    ) -> MoveRep {
+        MoveRep {
+            starting_square,
+            ending_square,
+            promotion,
+            piece_hint,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
-enum Promotion {
+pub enum Promotion {
     Queen,
     Bishop,
     Rook,
     Knight,
+}
+
+// Helps the move maker know what bitboard to manipulate
+pub enum PieceHint {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
 }
 
 // Stores state of the board which can not be recovered when unmaking a move
@@ -111,6 +140,7 @@ impl BoardState {
             reversable_move_counter: 0,
             fullmove_counter: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
+            move_stack_pointer: 0,
         }
     }
 
@@ -139,6 +169,7 @@ impl BoardState {
             reversable_move_counter: 0,
             fullmove_counter: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
+            move_stack_pointer: 0,
         }
     }
 

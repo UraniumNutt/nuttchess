@@ -1,5 +1,7 @@
 mod board;
 mod comm;
+mod generate;
+mod search;
 pub mod tables;
 use crate::board::*;
 use crate::comm::*;
