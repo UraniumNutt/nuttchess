@@ -115,8 +115,6 @@ impl BoardState {
         }
     }
 
-    pub fn print_board(&self) {}
-
     pub fn state_from_fen<'a>(
         mut fen_tokens: impl Iterator<Item = &'a str>,
     ) -> Result<BoardState, String> {

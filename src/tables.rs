@@ -1,13 +1,9 @@
-// constants for board indicies
-
-use std::process::Output;
-
-use rand::seq::index;
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
 use crate::print_bitboard;
 
+// constants for board indicies
 // rank 1
 pub const A1: u64 = 7;
 pub const B1: u64 = 6;
@@ -120,6 +116,10 @@ pub struct Tables {
     pub king_attacks: [u64; 64],
     pub relevent_rook_count: [u64; 64],
     pub relevent_bishop_count: [u64; 64],
+    pub rook_magics: [u64; 64],
+    pub bishop_magics: [u64; 64],
+    pub rook_attacks: Vec<Vec<u64>>,
+    pub bishop_attacks: Vec<Vec<u64>>,
 }
 impl Tables {
     pub fn new() -> Tables {
@@ -135,6 +135,142 @@ impl Tables {
         let mut king_attacks: [u64; 64] = [0; 64];
         let mut relevent_rook_count: [u64; 64] = [0; 64];
         let mut relevent_bishop_count: [u64; 64] = [0; 64];
+        let mut rook_attacks: Vec<Vec<u64>> = vec![vec![0; 64]; 4096];
+        let mut bishop_attacks: Vec<Vec<u64>> = vec![vec![0; 64]; 4096];
+
+        let rook_magics: [u64; 64] = [
+            0x880001080204000,
+            0x40004010002003,
+            0x2a00201082004008,
+            0x600040940201200,
+            0xa00084c62005020,
+            0xe00040810820011,
+            0xc80008021000200,
+            0x1000c8041000032,
+            0x00800080204008,
+            0x401802000400082,
+            0x2002002842008010,
+            0x1100081001a302,
+            0x446000a00041020,
+            0x802000804020010,
+            0x3362004108020044,
+            0x902000410920041,
+            0x80008a8002400220,
+            0x700404010002004,
+            0x2401010020004010,
+            0xc20210008100100,
+            0x04008080080004,
+            0x2001010002080400,
+            0x4890a40032011810,
+            0x640120000510084,
+            0x40208080004000,
+            0x2520004140003000,
+            0x4000200280100088,
+            0x823c100080080280,
+            0x60050100100800,
+            0x2052000a00100834,
+            0x824010400489022,
+            0x26028820000490c,
+            0x20804010800020,
+            0x00200081804000,
+            0x20006081801000,
+            0x10100101002008,
+            0x04004008080080,
+            0x2411002803000400,
+            0x4040080104001002,
+            0x210051004a000084,
+            0x80102000484004,
+            0x1000500020004002,
+            0x8020420480220012,
+            0x8800100409010020,
+            0x48008004008008,
+            0x802000804020010,
+            0x3362004108020044,
+            0x4800804081220004,
+            0x00400080002080,
+            0x7280409022010200,
+            0x01004020081100,
+            0x8540880280100480,
+            0x100080080040280,
+            0x00020004008080,
+            0x1100014810024400,
+            0x2e51000882004900,
+            0x1041490150220082,
+            0x42102100804003,
+            0x2800408020081202,
+            0xd0000810210105,
+            0x82020008102004aa,
+            0x0100084c000229,
+            0x10081710080a9204,
+            0x824010400489022,
+        ];
+
+        let bishop_magics: [u64; 64] = [
+            0x204200d0c102008,
+            0x20a00820d1880000,
+            0x26082a00820a10,
+            0x22080605c0100041,
+            0x4204152001005800,
+            0xa408820086002a8,
+            0x08a60508008504,
+            0x068a2050040000,
+            0x10ad02002040068,
+            0x41083000808904,
+            0x2080100122002000,
+            0x2080040506030407,
+            0x2000021210000000,
+            0x9108021104200090,
+            0x80040c0104108010,
+            0x0a108284090002,
+            0x9044202084140800,
+            0x2050000450108101,
+            0x201000802040010,
+            0x8414045803a84c04,
+            0x41010820081000,
+            0x8a000422012022,
+            0x110820400841100,
+            0x01020480881180,
+            0x1d20b00160040920,
+            0x01080004284804,
+            0x20910080c404200,
+            0x6014080080202040,
+            0x1801010040104000,
+            0x1000808108080410,
+            0x01040040440405,
+            0x2061020000524c01,
+            0x9418080a0040c210,
+            0x82101000030200,
+            0x41004100080808,
+            0x9800400820060200,
+            0x20062081040084,
+            0x2000a10100020080,
+            0x08420090704810,
+            0x2000a10100020080,
+            0x4001101822082480,
+            0x204088208811000,
+            0x8000501090001800,
+            0x4200022104002042,
+            0x001c3008840400,
+            0x206000a100404200,
+            0x2804080204200040,
+            0x224008212040050,
+            0x500b105a100010,
+            0x800701c5240000,
+            0x2010020100882211,
+            0x00000084041280,
+            0x00002082440009,
+            0x2000021021821200,
+            0x800701c5240000,
+            0x8000122408a4500,
+            0x1000002210040402,
+            0x00000084041280,
+            0x5600040004012390,
+            0x001c3008840400,
+            0x9a020c4040050100,
+            0x1404800504080204,
+            0x2320002310410b00,
+            0x2001225002049102,
+        ];
 
         // Do the generation logic here
         Tables::generate_white_pawn_push(&mut white_pawn_push);
@@ -145,8 +281,16 @@ impl Tables {
         Tables::generate_knight_attacks(&mut knight_attacks);
         Tables::generate_rook_occupancy_mask(&mut rook_occupancy);
         Tables::generate_bishop_occupancy_mask(&mut bishop_occupancy);
+        Tables::generate_queen_occupancy_mask(&mut queen_occupancy);
         Tables::generate_count_table(&mut relevent_rook_count, rook_occupancy);
         Tables::generate_count_table(&mut relevent_bishop_count, bishop_occupancy);
+        Tables::generate_rook_attacks(
+            &mut rook_attacks,
+            relevent_rook_count,
+            rook_magics,
+            rook_occupancy,
+        );
+        Tables::generate_bishop_attacks(&mut bishop_attacks, relevent_bishop_count, bishop_magics);
 
         // Now return the struct
         Tables {
@@ -161,7 +305,22 @@ impl Tables {
             king_attacks,
             relevent_rook_count,
             relevent_bishop_count,
+            rook_magics,
+            bishop_magics,
+            rook_attacks,
+            bishop_attacks,
         }
+    }
+
+    pub fn get_rook_attack(self, square: usize, mask: u64) -> u64 {
+        let magic = self.rook_magics[square];
+        let hash = Tables::apply_magic_hash(magic, self.relevent_rook_count[square], mask);
+        self.rook_attacks[hash as usize][square]
+    }
+    pub fn get_bishop_attack(self, square: usize, mask: u64) -> u64 {
+        let magic = self.bishop_magics[square];
+        let hash = Tables::apply_magic_hash(magic, self.relevent_bishop_count[square], mask);
+        self.bishop_attacks[hash as usize][square]
     }
 
     fn generate_white_pawn_attacks(table: &mut [u64; 64]) {
@@ -199,6 +358,7 @@ impl Tables {
             }
         }
     }
+
     fn generate_white_pawn_push(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
             let mask = 1 << shift_value;
@@ -433,6 +593,11 @@ impl Tables {
         }
     }
 
+    fn generate_queen_occupancy_mask(table: &mut [u64; 64]) {
+        Tables::generate_rook_occupancy_mask(table);
+        Tables::generate_bishop_occupancy_mask(table);
+    }
+
     // Calculate the relevent occupancy mask for the bishops
     pub fn calculate_relevent_bishops_occupancy(index: usize, blockers: u64) -> u64 {
         let rank = index / 8;
@@ -498,6 +663,34 @@ impl Tables {
         relevent
     }
 
+    fn generate_rook_attacks(
+        tables: &mut Vec<Vec<u64>>,
+        count: [u64; 64],
+        magics: [u64; 64],
+        occupancy: [u64; 64],
+    ) {
+        for square in 0..64 {
+            for permutation in 0..(1 << count[square]) {
+                let hash = Tables::apply_magic_hash(
+                    magics[square],
+                    count[square],
+                    Tables::map_number_to_occupancy(permutation, occupancy[square]),
+                );
+                tables[hash as usize][square] =
+                    Tables::calculate_relevent_rook_occupancy(square, permutation);
+            }
+        }
+    }
+    fn generate_bishop_attacks(tables: &mut Vec<Vec<u64>>, count: [u64; 64], magics: [u64; 64]) {
+        for square in 0..64 {
+            for permutation in 0..(1 << count[square]) {
+                let hash = Tables::apply_magic_hash(magics[square], count[square], permutation);
+                tables[hash as usize][square] =
+                    Tables::calculate_relevent_bishops_occupancy(square, permutation);
+            }
+        }
+    }
+
     // Generate a table of the counts based on the bit count of the masks
     fn generate_count_table(table: &mut [u64; 64], occupancy_masks: [u64; 64]) {
         for shift_value in 0..64 {
@@ -523,7 +716,7 @@ impl Tables {
         mapped
     }
 
-    // Generate a magic number
+    // Generate a magic number: will only use this make pregenerated tables
     pub fn generate_magic(
         attack_mask: u64,
         square_index: usize,
