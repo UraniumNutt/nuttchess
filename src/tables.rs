@@ -290,7 +290,12 @@ impl Tables {
             rook_magics,
             rook_occupancy,
         );
-        Tables::generate_bishop_attacks(&mut bishop_attacks, relevent_bishop_count, bishop_magics);
+        Tables::generate_bishop_attacks(
+            &mut bishop_attacks,
+            relevent_bishop_count,
+            bishop_magics,
+            bishop_occupancy,
+        );
 
         // Now return the struct
         Tables {
@@ -314,12 +319,20 @@ impl Tables {
 
     pub fn get_rook_attack(self, square: usize, mask: u64) -> u64 {
         let magic = self.rook_magics[square];
-        let hash = Tables::apply_magic_hash(magic, self.relevent_rook_count[square], mask);
+        let hash = Tables::apply_magic_hash(
+            magic,
+            self.relevent_rook_count[square],
+            mask & self.rook_occupancy[square],
+        );
         self.rook_attacks[hash as usize][square]
     }
     pub fn get_bishop_attack(self, square: usize, mask: u64) -> u64 {
         let magic = self.bishop_magics[square];
-        let hash = Tables::apply_magic_hash(magic, self.relevent_bishop_count[square], mask);
+        let hash = Tables::apply_magic_hash(
+            magic,
+            self.relevent_bishop_count[square],
+            mask & self.bishop_occupancy[square],
+        );
         self.bishop_attacks[hash as usize][square]
     }
 
@@ -676,17 +689,30 @@ impl Tables {
                     count[square],
                     Tables::map_number_to_occupancy(permutation, occupancy[square]),
                 );
-                tables[hash as usize][square] =
-                    Tables::calculate_relevent_rook_occupancy(square, permutation);
+                tables[hash as usize][square] = Tables::calculate_relevent_rook_occupancy(
+                    square,
+                    Tables::map_number_to_occupancy(permutation, occupancy[square]),
+                );
             }
         }
     }
-    fn generate_bishop_attacks(tables: &mut Vec<Vec<u64>>, count: [u64; 64], magics: [u64; 64]) {
+    fn generate_bishop_attacks(
+        tables: &mut Vec<Vec<u64>>,
+        count: [u64; 64],
+        magics: [u64; 64],
+        occupancy: [u64; 64],
+    ) {
         for square in 0..64 {
             for permutation in 0..(1 << count[square]) {
-                let hash = Tables::apply_magic_hash(magics[square], count[square], permutation);
-                tables[hash as usize][square] =
-                    Tables::calculate_relevent_bishops_occupancy(square, permutation);
+                let hash = Tables::apply_magic_hash(
+                    magics[square],
+                    count[square],
+                    Tables::map_number_to_occupancy(permutation, occupancy[square]),
+                );
+                tables[hash as usize][square] = Tables::calculate_relevent_bishops_occupancy(
+                    square,
+                    Tables::map_number_to_occupancy(permutation, occupancy[square]),
+                );
             }
         }
     }

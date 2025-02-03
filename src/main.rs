@@ -13,7 +13,8 @@ fn main() {
     // println!("{:?}", board);
     // board.print_board();
     let test = Tables::new();
-    let foo = test.get_rook_attack(28, 0x1002001000);
+    let foo = test.get_bishop_attack(49, 0x542010010004180);
+    print_bitboard(0x542010010004180);
     print_bitboard(foo);
     // while running {}
 }
