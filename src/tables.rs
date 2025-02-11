@@ -317,7 +317,7 @@ impl Tables {
         }
     }
 
-    pub fn get_rook_attack(self, square: usize, mask: u64) -> u64 {
+    pub fn get_rook_attack(&self, square: usize, mask: u64) -> u64 {
         let magic = self.rook_magics[square];
         let hash = Tables::apply_magic_hash(
             magic,
@@ -326,7 +326,7 @@ impl Tables {
         );
         self.rook_attacks[hash as usize][square]
     }
-    pub fn get_bishop_attack(self, square: usize, mask: u64) -> u64 {
+    pub fn get_bishop_attack(&self, square: usize, mask: u64) -> u64 {
         let magic = self.bishop_magics[square];
         let hash = Tables::apply_magic_hash(
             magic,
@@ -510,6 +510,7 @@ impl Tables {
     }
 
     // Calculate the relevent occupancy mask for the rooks
+    // TODO this needs to be changed to include all the 'inbetween' pieces
     pub fn calculate_relevent_rook_occupancy(index: usize, blockers: u64) -> u64 {
         let rank = index / 8;
         let file = index % 8;
@@ -526,24 +527,24 @@ impl Tables {
             loop_rank += 1;
         }
         // East
-        let mut loop_file = 1;
-        while loop_file < file {
+        let mut loop_file = file.saturating_sub(1);
+        while loop_file > 0 {
             let mask = 1 << Tables::rf_to_index(rank, loop_file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
-            loop_file += 1;
+            loop_file -= 1;
         }
         // South
-        let mut loop_rank = 1;
-        while loop_rank < rank {
+        let mut loop_rank = rank.saturating_sub(1);
+        while loop_rank > 0 {
             let mask = 1 << Tables::rf_to_index(loop_rank, file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
-            loop_rank += 1;
+            loop_rank -= 1;
         }
         // West
         let mut loop_file = file + 1;
@@ -819,5 +820,21 @@ impl Tables {
         }
 
         (bb & !bb + 1).ilog2() as i64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_relevent_rook_occupancy() {
+        let test_occupancy1 = 0x4080000000008080;
+        let result1 = Tables::calculate_relevent_rook_occupancy(63, test_occupancy1);
+        assert_eq!(result1, 0x4080000000000000);
+
+        let test_occupancy2 = 0x800040;
+        let result2 = Tables::calculate_relevent_rook_occupancy(0, test_occupancy1);
+        assert_eq!(result2, 0x8040);
     }
 }

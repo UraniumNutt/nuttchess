@@ -1,4 +1,8 @@
-use std::process::Output;
+use std::{
+    future::Pending,
+    io::{self, Write},
+    process::Output,
+};
 
 #[derive(Clone)]
 pub struct BoardState {
@@ -28,11 +32,13 @@ pub struct BoardState {
     pub move_stack_pointer: usize,
 }
 
+#[derive(Debug)]
 pub struct MoveRep {
-    starting_square: u64,
-    ending_square: u64,
-    promotion: Option<Promotion>,
-    piece_hint: PieceHint,
+    pub starting_square: u64,
+    pub ending_square: u64,
+    pub promotion: Option<Promotion>,
+    pub moved_type: PieceType,
+    pub attacked_type: Option<PieceType>,
 }
 
 impl MoveRep {
@@ -40,18 +46,20 @@ impl MoveRep {
         starting_square: u64,
         ending_square: u64,
         promotion: Option<Promotion>,
-        piece_hint: PieceHint,
+        piece_hint: PieceType,
+        attacked_type: Option<PieceType>,
     ) -> MoveRep {
         MoveRep {
             starting_square,
             ending_square,
             promotion,
-            piece_hint,
+            moved_type: piece_hint,
+            attacked_type,
         }
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Promotion {
     Queen,
     Bishop,
@@ -60,7 +68,8 @@ pub enum Promotion {
 }
 
 // Helps the move maker know what bitboard to manipulate
-pub enum PieceHint {
+#[derive(Copy, Clone, Debug)]
+pub enum PieceType {
     Pawn,
     Knight,
     Bishop,
@@ -336,6 +345,207 @@ impl BoardState {
 
         Ok(state)
     }
+
+    fn move_rep_from_masks(&self, start: u64, end: u64) -> MoveRep {
+        let moved_piece = self.get_piece_type(start);
+        let attacked_piece = self.get_piece_type(end);
+        MoveRep {
+            starting_square: start,
+            ending_square: end,
+            promotion: None,
+            moved_type: moved_piece.unwrap(),
+            attacked_type: attacked_piece,
+        }
+    }
+
+    pub fn apply_string_move(&mut self, play: String) {
+        let char1 = play.chars().nth(0).unwrap();
+        let char2 = play.chars().nth(1).unwrap();
+        let char3 = play.chars().nth(2).unwrap();
+        let char4 = play.chars().nth(3).unwrap();
+
+        let start = position_to_mask(char1, char2).unwrap();
+        let end = position_to_mask(char3, char4).unwrap();
+        let move_rep = self.move_rep_from_masks(start, end);
+        self.make(&move_rep);
+    }
+
+    // Changes the board state to reflect the move. Also pushes to the move stack
+    pub fn make(&mut self, play: &MoveRep) {
+        self.clear(play.starting_square, Some(play.moved_type));
+        self.clear_all(play.ending_square);
+        self.set(play.ending_square, Some(play.moved_type));
+        // Do special logic here
+        self.white_to_move = !self.white_to_move;
+    }
+
+    // Clear all bitboards at this mask
+    #[inline]
+    fn clear_all(&mut self, bb: u64) {
+        self.white_pawns &= !bb;
+        self.white_knights &= !bb;
+        self.white_bishops &= !bb;
+        self.white_rooks &= !bb;
+        self.white_queens &= !bb;
+        self.white_king &= !bb;
+
+        self.black_pawns &= !bb;
+        self.black_knights &= !bb;
+        self.black_bishops &= !bb;
+        self.black_rooks &= !bb;
+        self.black_queens &= !bb;
+        self.black_king &= !bb;
+    }
+
+    // Clear bitboards for this value
+    #[inline]
+    fn clear(&mut self, bb: u64, attacked: Option<PieceType>) {
+        if let Some(piece) = attacked {
+            if self.white_to_move {
+                match piece {
+                    PieceType::Pawn => self.white_pawns &= !bb,
+                    PieceType::Knight => self.white_knights &= !bb,
+                    PieceType::Bishop => self.white_bishops &= !bb,
+                    PieceType::Rook => self.white_rooks &= !bb,
+                    PieceType::Queen => self.white_queens &= !bb,
+                    PieceType::King => self.white_king &= !bb,
+                }
+            } else {
+                match piece {
+                    PieceType::Pawn => self.black_pawns &= !bb,
+                    PieceType::Knight => self.black_knights &= !bb,
+                    PieceType::Bishop => self.black_bishops &= !bb,
+                    PieceType::Rook => self.black_rooks &= !bb,
+                    PieceType::Queen => self.black_queens &= !bb,
+                    PieceType::King => self.black_king &= !bb,
+                }
+            }
+        } else {
+            return;
+        }
+    }
+
+    #[inline]
+    fn set(&mut self, bb: u64, present_piece: Option<PieceType>) {
+        if let Some(piece) = present_piece {
+            if self.white_to_move {
+                match piece {
+                    PieceType::Pawn => self.white_pawns |= bb,
+                    PieceType::Knight => self.white_knights |= bb,
+                    PieceType::Bishop => self.white_bishops |= bb,
+                    PieceType::Rook => self.white_rooks |= bb,
+                    PieceType::Queen => self.white_queens |= bb,
+                    PieceType::King => self.white_king |= bb,
+                }
+            } else {
+                match piece {
+                    PieceType::Pawn => self.black_pawns |= bb,
+                    PieceType::Knight => self.black_knights |= bb,
+                    PieceType::Bishop => self.black_bishops |= bb,
+                    PieceType::Rook => self.black_rooks |= bb,
+                    PieceType::Queen => self.black_queens |= bb,
+                    PieceType::King => self.black_king |= bb,
+                }
+            }
+        }
+    }
+
+    // Reverts the move from the board. Pops from the move stack
+    pub fn unmake(&mut self, play: &MoveRep) {
+        // Something is going wrong in unmake
+        // it only happens when attacked is none
+        let first_count = self.occupancy().count_ones();
+        self.white_to_move = !self.white_to_move;
+        // I guess swapping the order of the next two lines fixed it?
+        self.set(play.ending_square, play.attacked_type);
+        self.clear(play.ending_square, Some(play.moved_type));
+        self.set(play.starting_square, Some(play.moved_type));
+        let second_count = self.occupancy().count_ones();
+        if play.attacked_type.is_none() {
+            if second_count != first_count {
+                let piece_string = match play.moved_type {
+                    PieceType::Pawn => "pawn",
+                    PieceType::Knight => "knight",
+
+                    _ => "",
+                };
+                let color = match self.white_to_move {
+                    true => "white",
+                    false => "black",
+                };
+                let attacked = match play.attacked_type {
+                    Some(_) => "some",
+                    None => "none",
+                };
+                // print_bitboard(self.occupancy());
+                // println!("{}", piece_string);
+                // println!("{}", color);
+                // println!("{}", attacked);
+                // panic!();
+            }
+        }
+    }
+
+    #[inline]
+    pub fn white_occupancy(&self) -> u64 {
+        self.white_pawns
+            | self.white_knights
+            | self.white_bishops
+            | self.white_rooks
+            | self.white_queens
+            | self.white_king
+    }
+
+    #[inline]
+    pub fn black_occupancy(&self) -> u64 {
+        self.black_pawns
+            | self.black_knights
+            | self.black_bishops
+            | self.black_rooks
+            | self.black_queens
+            | self.black_king
+    }
+
+    #[inline]
+    pub fn occupancy(&self) -> u64 {
+        self.white_pawns
+            | self.white_knights
+            | self.white_bishops
+            | self.white_rooks
+            | self.white_queens
+            | self.white_king
+            | self.black_pawns
+            | self.black_knights
+            | self.black_bishops
+            | self.black_rooks
+            | self.black_queens
+            | self.black_king
+    }
+
+    #[inline]
+    // Gets the type of piece present at the mask
+    pub fn get_piece_type(&self, mask: u64) -> Option<PieceType> {
+        if self.white_pawns & mask != 0 || self.black_pawns & mask != 0 {
+            return Some(PieceType::Pawn);
+        }
+        if self.white_knights & mask != 0 || self.black_knights & mask != 0 {
+            return Some(PieceType::Knight);
+        }
+        if self.white_bishops & mask != 0 || self.white_bishops & mask != 0 {
+            return Some(PieceType::Bishop);
+        }
+        if self.white_rooks & mask != 0 || self.white_rooks & mask != 0 {
+            return Some(PieceType::Rook);
+        }
+        if self.white_queens & mask != 0 || self.white_queens & mask != 0 {
+            return Some(PieceType::Queen);
+        }
+        if self.white_king & mask != 0 || self.white_king & mask != 0 {
+            return Some(PieceType::King);
+        }
+
+        None
+    }
 }
 
 impl MoveRep {
@@ -348,7 +558,7 @@ impl MoveRep {
         Ok(mov)
     }
 
-    fn mask_to_string(mask: u64) -> Result<String, String> {
+    pub fn mask_to_string(mask: u64) -> Result<String, String> {
         let mut pos = String::new();
 
         let file = mask.ilog2() / 8;
@@ -505,4 +715,5 @@ pub fn print_bitboard(bb: u64) {
     );
 
     println!("\n    a b c d e f g h");
+    io::stdout().flush();
 }
