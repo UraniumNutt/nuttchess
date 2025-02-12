@@ -524,6 +524,7 @@ impl Tables {
                 relevent |= mask;
                 break;
             }
+            relevent |= mask;
             loop_rank += 1;
         }
         // East
@@ -534,6 +535,7 @@ impl Tables {
                 relevent |= mask;
                 break;
             }
+            relevent |= mask;
             loop_file -= 1;
         }
         // South
@@ -544,6 +546,7 @@ impl Tables {
                 relevent |= mask;
                 break;
             }
+            relevent |= mask;
             loop_rank -= 1;
         }
         // West
@@ -554,6 +557,7 @@ impl Tables {
                 relevent |= mask;
                 break;
             }
+            relevent |= mask;
             loop_file += 1;
         }
         relevent
@@ -834,7 +838,11 @@ mod tests {
         assert_eq!(result1, 0x4080000000000000);
 
         let test_occupancy2 = 0x800040;
-        let result2 = Tables::calculate_relevent_rook_occupancy(0, test_occupancy1);
-        assert_eq!(result2, 0x8040);
+        let result2 = Tables::calculate_relevent_rook_occupancy(7, test_occupancy2);
+        assert_eq!(result2, 0x808040);
+
+        let test_occupancy3 = 8388735;
+        let result3 = Tables::calculate_relevent_rook_occupancy(7, test_occupancy3);
+        assert_eq!(result3, 0x808040);
     }
 }

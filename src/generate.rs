@@ -22,6 +22,12 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                 while pushes != 0 {
                     let end_square = 1 << pop_lsb(&mut pushes);
                     let attacked_type = board.get_piece_type(end_square);
+                    // Check that a double push does not skip over a piece
+                    if (end_square >> 16) == (1u64 << start_square) as u64
+                        && (end_square >> 8) & occupancy != 0
+                    {
+                        continue;
+                    }
                     if (end_square & occupancy) == 0 {
                         let push = MoveRep::new(
                             1 << start_square,
@@ -113,6 +119,12 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                 while pushes != 0 {
                     let end_square = 1 << pop_lsb(&mut pushes);
                     let attacked_type = board.get_piece_type(end_square);
+                    // Check that a double push does not skip over a piece
+                    if (end_square << 16) == (1u64 << start_square) as u64
+                        && (end_square << 8) & occupancy != 0
+                    {
+                        continue;
+                    }
                     if (end_square & occupancy) == 0 {
                         let push = MoveRep::new(
                             1 << start_square,

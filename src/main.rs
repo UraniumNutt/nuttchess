@@ -25,9 +25,6 @@ fn main() {
     let log_file = Path::new("log.txt");
     let mut comm = Comm::create(log_file).unwrap();
     let mut board = BoardState::state_from_fen(fen.split(" ")).unwrap();
-    // let tables = Tables::new();
-    // let rook_test = tables.get_rook_attack(63, board.occupancy());
-    // print_bitboard(rook_test);
     if moves_list.len() != 0 {
         for mv in moves {
             board.apply_string_move(mv.to_string());
