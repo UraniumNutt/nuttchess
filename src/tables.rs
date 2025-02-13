@@ -485,8 +485,8 @@ impl Tables {
     // Get the occupancy mask for the rooks
     fn generate_rook_occupancy_mask(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
-            let rank: isize = (shift_value / 8) as isize; // the number
-            let file: isize = (shift_value % 8) as isize; // the letter
+            let rank = (shift_value / 8); // the number
+            let file = (shift_value % 8); // the letter
 
             // North
             for loop_rank in (rank + 1)..7 {
@@ -509,8 +509,8 @@ impl Tables {
 
     // Calculate the relevent occupancy mask for the rooks
     pub fn calculate_relevent_rook_occupancy(index: usize, blockers: u64) -> u64 {
-        let rank = (index / 8) as isize;
-        let file = (index % 8) as isize;
+        let rank = (index / 8);
+        let file = (index % 8);
         let mut relevent = 0;
 
         // North
@@ -569,8 +569,8 @@ impl Tables {
 
             // North east
             if mask & Self::FILE_H == 0 {
-                let mut rank_loop: isize = rank + 1;
-                let mut file_loop: isize = file - 1;
+                let mut rank_loop = rank + 1;
+                let mut file_loop = file - 1;
                 while rank_loop < 7 && file_loop > 0 {
                     table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop += 1;
@@ -615,61 +615,61 @@ impl Tables {
 
     // Calculate the relevent occupancy mask for the bishops
     pub fn calculate_relevent_bishops_occupancy(index: usize, blockers: u64) -> u64 {
-        let rank: isize = (index / 8) as isize;
-        let file: isize = (index % 8) as isize;
+        let rank = index / 8;
+        let file = index % 8;
         let mut relevent = 0;
 
         // North east
-        let mut rank_loop: isize = rank + 1;
-        let mut file_loop: isize = file - 1;
-        while rank_loop <= 7 && file_loop >= 0 {
+        let mut rank_loop = rank;
+        let mut file_loop = file;
+        while rank_loop < 7 && file_loop > 0 {
+            rank_loop += 1;
+            file_loop -= 1;
             let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
             if loop_mask & blockers != 0 {
                 relevent |= loop_mask;
                 break;
             }
             relevent |= loop_mask;
-            rank_loop += 1;
-            file_loop -= 1;
         }
         // South east
-        let mut rank_loop = rank.saturating_sub(1);
-        let mut file_loop = file.saturating_sub(1);
-        while rank_loop > 0 && file_loop >= 0 {
-            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
-            if loop_mask & blockers != 0 {
-                relevent |= loop_mask;
-                break;
-            }
-            relevent |= loop_mask;
+        let mut rank_loop = rank;
+        let mut file_loop = file;
+        while rank_loop > 0 && file_loop > 0 {
             rank_loop -= 1;
             file_loop -= 1;
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            relevent |= loop_mask;
         }
         // South west
-        let mut rank_loop = rank.saturating_sub(1);
-        let mut file_loop = file + 1;
-        while rank_loop >= 0 && file_loop <= 7 {
-            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
-            if loop_mask & blockers != 0 {
-                relevent |= loop_mask;
-                break;
-            }
-            relevent |= loop_mask;
+        let mut rank_loop = rank;
+        let mut file_loop = file;
+        while rank_loop > 0 && file_loop < 7 {
             rank_loop -= 1;
             file_loop += 1;
-        }
-        // North west
-        let mut rank_loop = rank + 1;
-        let mut file_loop = file + 1;
-        while rank_loop <= 7 && file_loop <= 7 {
             let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
             if loop_mask & blockers != 0 {
                 relevent |= loop_mask;
                 break;
             }
             relevent |= loop_mask;
+        }
+        // North west
+        let mut rank_loop = rank;
+        let mut file_loop = file;
+        while rank_loop < 7 && file_loop < 7 {
             rank_loop += 1;
             file_loop += 1;
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            relevent |= loop_mask;
         }
 
         relevent
@@ -807,7 +807,7 @@ impl Tables {
     }
 
     // Maps the rank and file to the index
-    const fn rf_to_index(rank: isize, file: isize) -> u64 {
+    const fn rf_to_index(rank: usize, file: usize) -> u64 {
         (file + 8 * rank) as u64
     }
 
