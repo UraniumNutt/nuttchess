@@ -1,8 +1,6 @@
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
-use crate::print_bitboard;
-
 pub struct Tables {
     // Look up table for attack bitboards
     pub white_pawn_attacks: [u64; 64],
@@ -487,8 +485,8 @@ impl Tables {
     // Get the occupancy mask for the rooks
     fn generate_rook_occupancy_mask(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
-            let rank = shift_value / 8; // the number
-            let file = shift_value % 8; // the letter
+            let rank: isize = (shift_value / 8) as isize; // the number
+            let file: isize = (shift_value % 8) as isize; // the letter
 
             // North
             for loop_rank in (rank + 1)..7 {
@@ -510,10 +508,9 @@ impl Tables {
     }
 
     // Calculate the relevent occupancy mask for the rooks
-    // TODO this needs to be changed to include all the 'inbetween' pieces
     pub fn calculate_relevent_rook_occupancy(index: usize, blockers: u64) -> u64 {
-        let rank = index / 8;
-        let file = index % 8;
+        let rank = (index / 8) as isize;
+        let file = (index % 8) as isize;
         let mut relevent = 0;
 
         // North
@@ -572,10 +569,10 @@ impl Tables {
 
             // North east
             if mask & Self::FILE_H == 0 {
-                let mut rank_loop = rank + 1;
-                let mut file_loop = file - 1;
+                let mut rank_loop: isize = rank + 1;
+                let mut file_loop: isize = file - 1;
                 while rank_loop < 7 && file_loop > 0 {
-                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop += 1;
                     file_loop -= 1;
                 }
@@ -585,7 +582,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file - 1;
                 while rank_loop > 0 && file_loop > 0 {
-                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop -= 1;
                 }
@@ -595,7 +592,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file + 1;
                 while rank_loop > 0 && file_loop < 7 {
-                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop += 1;
                 }
@@ -604,7 +601,7 @@ impl Tables {
             let mut rank_loop = rank + 1;
             let mut file_loop = file + 1;
             while rank_loop < 7 && file_loop < 7 {
-                table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                 rank_loop += 1;
                 file_loop += 1;
             }
@@ -618,62 +615,59 @@ impl Tables {
 
     // Calculate the relevent occupancy mask for the bishops
     pub fn calculate_relevent_bishops_occupancy(index: usize, blockers: u64) -> u64 {
-        let rank = index / 8;
-        let file = index % 8;
-        let mask = 1 << index;
+        let rank: isize = (index / 8) as isize;
+        let file: isize = (index % 8) as isize;
         let mut relevent = 0;
 
         // North east
-        if mask & Self::FILE_H == 0 {
-            let mut rank_loop = rank + 1;
-            let mut file_loop = file - 1;
-            while rank_loop < 7 && file_loop > 0 {
-                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
-                if loop_mask & blockers != 0 {
-                    relevent |= loop_mask;
-                    break;
-                }
-                rank_loop += 1;
-                file_loop -= 1;
-            }
-        }
-        // South east
-        if mask & Self::FILE_H == 0 && mask & Self::RANK_1 == 0 {
-            let mut rank_loop = rank - 1;
-            let mut file_loop = file - 1;
-            while rank_loop > 0 && file_loop > 0 {
-                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
-                if loop_mask & blockers != 0 {
-                    relevent |= loop_mask;
-                    break;
-                }
-                rank_loop -= 1;
-                file_loop -= 1;
-            }
-        }
-        // South west
-        if mask & Self::RANK_1 == 0 {
-            let mut rank_loop = rank - 1;
-            let mut file_loop = file + 1;
-            while rank_loop > 0 && file_loop < 7 {
-                let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
-                if loop_mask & blockers != 0 {
-                    relevent |= loop_mask;
-                    break;
-                }
-                rank_loop -= 1;
-                file_loop += 1;
-            }
-        }
-        // North west
-        let mut rank_loop = rank + 1;
-        let mut file_loop = file + 1;
-        while rank_loop < 7 && file_loop < 7 {
+        let mut rank_loop: isize = rank + 1;
+        let mut file_loop: isize = file - 1;
+        while rank_loop <= 7 && file_loop >= 0 {
             let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
             if loop_mask & blockers != 0 {
                 relevent |= loop_mask;
                 break;
             }
+            relevent |= loop_mask;
+            rank_loop += 1;
+            file_loop -= 1;
+        }
+        // South east
+        let mut rank_loop = rank.saturating_sub(1);
+        let mut file_loop = file.saturating_sub(1);
+        while rank_loop > 0 && file_loop >= 0 {
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            relevent |= loop_mask;
+            rank_loop -= 1;
+            file_loop -= 1;
+        }
+        // South west
+        let mut rank_loop = rank.saturating_sub(1);
+        let mut file_loop = file + 1;
+        while rank_loop >= 0 && file_loop <= 7 {
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            relevent |= loop_mask;
+            rank_loop -= 1;
+            file_loop += 1;
+        }
+        // North west
+        let mut rank_loop = rank + 1;
+        let mut file_loop = file + 1;
+        while rank_loop <= 7 && file_loop <= 7 {
+            let loop_mask = 1 << Tables::rf_to_index(rank_loop, file_loop);
+            if loop_mask & blockers != 0 {
+                relevent |= loop_mask;
+                break;
+            }
+            relevent |= loop_mask;
             rank_loop += 1;
             file_loop += 1;
         }
@@ -768,7 +762,7 @@ impl Tables {
         // Make a xorshift
         let mut rng = XorShiftRng::seed_from_u64(0);
         // Run until we get a good magic
-        let mut found_magic = false;
+        let mut found_magic;
 
         loop {
             // Start to apply the hash to see if it works
@@ -813,7 +807,7 @@ impl Tables {
     }
 
     // Maps the rank and file to the index
-    const fn rf_to_index(rank: usize, file: usize) -> u64 {
+    const fn rf_to_index(rank: isize, file: isize) -> u64 {
         (file + 8 * rank) as u64
     }
 
@@ -829,6 +823,8 @@ impl Tables {
 
 #[cfg(test)]
 mod tests {
+    use crate::print_bitboard;
+
     use super::*;
 
     #[test]
@@ -844,5 +840,41 @@ mod tests {
         let test_occupancy3 = 8388735;
         let result3 = Tables::calculate_relevent_rook_occupancy(7, test_occupancy3);
         assert_eq!(result3, 0x808040);
+    }
+
+    #[test]
+    fn test_calculate_relevent_bishop_occupancy() {
+        let test1 = 0x82000000084400;
+        let expected1 = 0x82442800284000;
+        let result1 = Tables::calculate_relevent_bishops_occupancy(28, test1);
+        println!("Input: {}", test1);
+        print_bitboard(test1);
+        println!("Expected: {}", expected1);
+        print_bitboard(expected1);
+        println!("Actual: {}", result1);
+        print_bitboard(result1);
+        assert_eq!(result1, expected1);
+
+        let test2 = 0x40010000000;
+        let expected2 = 0x2040000000000;
+        let result2 = Tables::calculate_relevent_bishops_occupancy(56, test2);
+        println!("Input: {}", test2);
+        print_bitboard(test2);
+        println!("Expected: {}", expected2);
+        print_bitboard(expected2);
+        println!("Actual: {}", result2);
+        print_bitboard(result2);
+        assert_eq!(result2, expected2);
+
+        let test3 = 0x8000001000080;
+        let expected3 = 0x10a000a11204080;
+        let result3 = Tables::calculate_relevent_bishops_occupancy(42, test3);
+        println!("Input: {}", test3);
+        print_bitboard(test3);
+        println!("Expected: {}", expected3);
+        print_bitboard(expected3);
+        println!("Actual: {}", result3);
+        print_bitboard(result3);
+        assert_eq!(result3, expected3);
     }
 }

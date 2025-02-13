@@ -1,5 +1,4 @@
 // use crate::Tables;
-use crate::Tables;
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardState {
@@ -724,6 +723,8 @@ pub fn print_bitboard(bb: u64) {
 
 #[cfg(test)]
 mod tests {
+    use crate::tables::Tables;
+
     use super::*;
 
     #[test]
