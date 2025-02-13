@@ -673,6 +673,18 @@ impl BoardState {
 
         attack_mask
     }
+
+    // Get if the white king is in check
+    pub fn white_in_check(&self, table: &Tables) -> bool {
+        let black_attack_mask = self.black_attack_mask(table);
+        black_attack_mask & self.white_king != 0
+    }
+
+    // Get if the black king is in check
+    pub fn black_in_check(&self, table: &Tables) -> bool {
+        let white_attack_mask = self.white_attack_mask(table);
+        white_attack_mask & self.black_king != 0
+    }
 }
 
 impl MoveRep {
@@ -1544,6 +1556,94 @@ mod tests {
         let tables = Tables::new();
         let expected = 0x11925438ef385492;
         let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pp1ppppp/2p5/q7/3P4/4P3/PPP2PPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkb1r/pppppppp/8/8/8/5n2/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pppppppp/8/8/4q3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbq1bnr/ppppkppp/8/3Np3/8/8/PPPPPPPP/R1BQKBNR b KQ - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/3N4/8/8/8/PPPPPPPP/R1BQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/3Q4/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.black_in_check(&tables);
         assert_eq!(expected, result);
     }
 }
