@@ -553,20 +553,20 @@ impl BoardState {
         // White bishops
         let mut bishop_bb = self.white_bishops;
         while bishop_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut bishop_bb);
+            let start_square = pop_lsb(&mut bishop_bb);
             let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
             while bishop_attacks != 0 {
-                let attack_square = pop_lsb(&mut bishop_attacks) as u64;
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
         // White rooks
         let mut rook_bb = self.white_rooks;
         while rook_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut rook_bb);
+            let start_square = pop_lsb(&mut rook_bb);
             let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
             while rook_attacks != 0 {
-                let attack_square = pop_lsb(&mut rook_attacks) as u64;
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
@@ -575,23 +575,24 @@ impl BoardState {
 
         let mut bishop_bb_part = self.white_queens;
         while bishop_bb_part != 0 {
-            let start_square = 1 << pop_lsb(&mut bishop_bb_part);
+            let start_square = pop_lsb(&mut bishop_bb_part);
             let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
             while bishop_part_attacks != 0 {
-                let attack_square = pop_lsb(&mut bishop_part_attacks) as u64;
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
 
         let mut rook_bb_part = self.white_queens;
         while rook_bb_part != 0 {
-            let start_square = 1 << pop_lsb(&mut rook_bb_part);
+            let start_square = pop_lsb(&mut rook_bb_part);
             let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
             while rook_part_attacks != 0 {
-                let attack_square = pop_lsb(&mut rook_part_attacks) as u64;
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
+
         // White king
         let mut king_bb = self.white_king;
         while king_bb != 0 {
@@ -609,34 +610,34 @@ impl BoardState {
         // black pawns
         let mut pawn_bb = self.black_pawns;
         while pawn_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut pawn_bb);
+            let start_square = pop_lsb(&mut pawn_bb);
             attack_mask |= table.black_pawn_attacks[start_square];
         }
 
         // black knights
         let mut knight_bb = self.black_knights;
         while knight_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut knight_bb);
+            let start_square = pop_lsb(&mut knight_bb);
             attack_mask |= table.knight_attacks[start_square];
         }
 
         // black bishops
         let mut bishop_bb = self.black_bishops;
         while bishop_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut bishop_bb);
+            let start_square = pop_lsb(&mut bishop_bb);
             let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
             while bishop_attacks != 0 {
-                let attack_square = 1 << pop_lsb(&mut bishop_attacks);
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
         // black rooks
         let mut rook_bb = self.black_rooks;
         while rook_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut rook_bb);
+            let start_square = pop_lsb(&mut rook_bb);
             let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
             while rook_attacks != 0 {
-                let attack_square = 1 << pop_lsb(&mut rook_attacks);
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
@@ -645,27 +646,28 @@ impl BoardState {
 
         let mut bishop_bb_part = self.black_queens;
         while bishop_bb_part != 0 {
-            let start_square = 1 << pop_lsb(&mut bishop_bb_part);
+            let start_square = pop_lsb(&mut bishop_bb_part);
             let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
             while bishop_part_attacks != 0 {
-                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks);
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
 
         let mut rook_bb_part = self.black_queens;
         while rook_bb_part != 0 {
-            let start_square = 1 << pop_lsb(&mut rook_bb_part);
+            let start_square = pop_lsb(&mut rook_bb_part);
             let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
             while rook_part_attacks != 0 {
-                let attack_square = 1 << pop_lsb(&mut rook_part_attacks);
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
                 attack_mask |= attack_square;
             }
         }
+
         // black king
         let mut king_bb = self.black_king;
         while king_bb != 0 {
-            let start_square = 1 << pop_lsb(&mut king_bb);
+            let start_square = pop_lsb(&mut king_bb);
             attack_mask |= table.king_attacks[start_square];
         }
 
@@ -1427,5 +1429,121 @@ mod tests {
     }
 
     #[test]
-    fn get_black_attack_mask() {}
+    fn white_attack_mask_rook() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/8/3R4 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x10101010101010ef;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_rook_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3P4/8/8/3R4 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x28101010ef;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_bishop() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/8/5B2 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x804020110a00;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_bishop_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/2P5/8/8/5B2 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x5020110a00;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_queen() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3Q4/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x11925438ef385492;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_starting_pos() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 0xffff7e;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_pawn() {
+        let board = BoardState::state_from_string_fen("8/8/3p4/8/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x2800000000;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_knight() {
+        let board = BoardState::state_from_string_fen("8/8/3n4/8/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x2844004428000000;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_rook() {
+        let board = BoardState::state_from_string_fen("8/8/8/3r4/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x101010ef10101010;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_rook_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/3r1p2/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x101010ec1a101010;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_bishop() {
+        let board = BoardState::state_from_string_fen("8/8/8/3b4/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x8244280028448201;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_bishop_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/2p5/8/8/5b2 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x20510a00;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_queen() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3q4/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x11925438ef385492;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
 }

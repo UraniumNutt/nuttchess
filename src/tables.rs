@@ -485,8 +485,8 @@ impl Tables {
     // Get the occupancy mask for the rooks
     fn generate_rook_occupancy_mask(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
-            let rank = (shift_value / 8); // the number
-            let file = (shift_value % 8); // the letter
+            let rank = shift_value / 8; // the number
+            let file = shift_value % 8; // the letter
 
             // North
             for loop_rank in (rank + 1)..7 {
@@ -509,53 +509,53 @@ impl Tables {
 
     // Calculate the relevent occupancy mask for the rooks
     pub fn calculate_relevent_rook_occupancy(index: usize, blockers: u64) -> u64 {
-        let rank = (index / 8);
-        let file = (index % 8);
+        let rank = index / 8;
+        let file = index % 8;
         let mut relevent = 0;
 
         // North
-        let mut loop_rank = rank + 1;
+        let mut loop_rank = rank;
         while loop_rank < 7 {
+            loop_rank += 1;
             let mask = 1 << Tables::rf_to_index(loop_rank, file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
             relevent |= mask;
-            loop_rank += 1;
         }
         // East
-        let mut loop_file = file.saturating_sub(1);
+        let mut loop_file = file;
         while loop_file > 0 {
+            loop_file -= 1;
             let mask = 1 << Tables::rf_to_index(rank, loop_file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
             relevent |= mask;
-            loop_file -= 1;
         }
         // South
-        let mut loop_rank = rank.saturating_sub(1);
+        let mut loop_rank = rank;
         while loop_rank > 0 {
+            loop_rank -= 1;
             let mask = 1 << Tables::rf_to_index(loop_rank, file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
             relevent |= mask;
-            loop_rank -= 1;
         }
         // West
-        let mut loop_file = file + 1;
+        let mut loop_file = file;
         while loop_file < 7 {
+            loop_file += 1;
             let mask = 1 << Tables::rf_to_index(rank, loop_file);
             if mask & blockers != 0 {
                 relevent |= mask;
                 break;
             }
             relevent |= mask;
-            loop_file += 1;
         }
         relevent
     }
@@ -828,18 +828,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_calculate_relevent_rook_occupancy() {
+    fn test_calculate_relevent_rook_occupancy_1() {
         let test_occupancy1 = 0x4080000000008080;
         let result1 = Tables::calculate_relevent_rook_occupancy(63, test_occupancy1);
         assert_eq!(result1, 0x4080000000000000);
+    }
 
+    #[test]
+    fn test_calculate_relevent_rook_occupancy_2() {
         let test_occupancy2 = 0x800040;
         let result2 = Tables::calculate_relevent_rook_occupancy(7, test_occupancy2);
         assert_eq!(result2, 0x808040);
+    }
 
+    #[test]
+    fn test_calculate_relevent_rook_occupancy_3() {
         let test_occupancy3 = 8388735;
         let result3 = Tables::calculate_relevent_rook_occupancy(7, test_occupancy3);
         assert_eq!(result3, 0x808040);
+    }
+
+    #[test]
+    fn test_calculate_relevent_rook_occupancy_4() {
+        let test_occupancy = 0xffff;
+        let result = Tables::calculate_relevent_rook_occupancy(7, test_occupancy);
+        assert_eq!(result, 0x8040);
     }
 
     #[test]
@@ -854,7 +867,10 @@ mod tests {
         println!("Actual: {}", result1);
         print_bitboard(result1);
         assert_eq!(result1, expected1);
+    }
 
+    #[test]
+    fn test_calculate_relevent_bishop_occupancy_2() {
         let test2 = 0x40010000000;
         let expected2 = 0x2040000000000;
         let result2 = Tables::calculate_relevent_bishops_occupancy(56, test2);
@@ -865,7 +881,10 @@ mod tests {
         println!("Actual: {}", result2);
         print_bitboard(result2);
         assert_eq!(result2, expected2);
+    }
 
+    #[test]
+    fn test_calculate_relevent_bishop_occupancy_3() {
         let test3 = 0x8000001000080;
         let expected3 = 0x10a000a11204080;
         let result3 = Tables::calculate_relevent_bishops_occupancy(42, test3);

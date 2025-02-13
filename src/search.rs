@@ -66,6 +66,15 @@ mod tests {
     }
 
     #[test]
+    fn depth_3() {
+        let mut board = BoardState::starting_state();
+        let tables = Tables::new();
+
+        let node_count = perft_search(&mut board, &tables, 3);
+        assert_eq!(node_count, 8902);
+    }
+
+    #[test]
     fn board_same_after_iterration_start_pos() {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
