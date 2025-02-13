@@ -1,4 +1,5 @@
 // use crate::Tables;
+use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardState {
@@ -97,25 +98,6 @@ impl MoveStackFrame {
             black_queenside_castle_rights: true,
             black_kingside_castle_rights: true,
         }
-    }
-}
-
-pub struct TreeNode {
-    pub board_state: BoardState,
-    pub applied_move: Option<MoveRep>,
-    pub children: Vec<TreeNode>,
-}
-
-impl TreeNode {
-    pub fn get_leaf_nodes(&self) -> u64 {
-        if self.children.len() == 0 {
-            return 1;
-        }
-        let mut count = 0;
-        for child in &self.children {
-            count += child.get_leaf_nodes();
-        }
-        count
     }
 }
 
@@ -548,6 +530,146 @@ impl BoardState {
         }
 
         None
+    }
+
+    // Get the attack map of white
+    pub fn white_attack_mask(&self, table: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        // White pawns
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= table.white_pawn_attacks[start_square];
+        }
+
+        // White knights
+        let mut knight_bb = self.white_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= table.knight_attacks[start_square];
+        }
+
+        // White bishops
+        let mut bishop_bb = self.white_bishops;
+        while bishop_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_attacks != 0 {
+                let attack_square = pop_lsb(&mut bishop_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+        // White rooks
+        let mut rook_bb = self.white_rooks;
+        while rook_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut rook_bb);
+            let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_attacks != 0 {
+                let attack_square = pop_lsb(&mut rook_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // White queens
+
+        let mut bishop_bb_part = self.white_queens;
+        while bishop_bb_part != 0 {
+            let start_square = 1 << pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_part_attacks != 0 {
+                let attack_square = pop_lsb(&mut bishop_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.white_queens;
+        while rook_bb_part != 0 {
+            let start_square = 1 << pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_part_attacks != 0 {
+                let attack_square = pop_lsb(&mut rook_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+        // White king
+        let mut king_bb = self.white_king;
+        while king_bb != 0 {
+            let start_square = pop_lsb(&mut king_bb);
+            attack_mask |= table.king_attacks[start_square];
+        }
+
+        attack_mask
+    }
+
+    // Get the attack map of black
+    pub fn black_attack_mask(&self, table: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        // black pawns
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut pawn_bb);
+            attack_mask |= table.black_pawn_attacks[start_square];
+        }
+
+        // black knights
+        let mut knight_bb = self.black_knights;
+        while knight_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut knight_bb);
+            attack_mask |= table.knight_attacks[start_square];
+        }
+
+        // black bishops
+        let mut bishop_bb = self.black_bishops;
+        while bishop_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks);
+                attack_mask |= attack_square;
+            }
+        }
+        // black rooks
+        let mut rook_bb = self.black_rooks;
+        while rook_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut rook_bb);
+            let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_attacks);
+                attack_mask |= attack_square;
+            }
+        }
+
+        // black queens
+
+        let mut bishop_bb_part = self.black_queens;
+        while bishop_bb_part != 0 {
+            let start_square = 1 << pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks);
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.black_queens;
+        while rook_bb_part != 0 {
+            let start_square = 1 << pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks);
+                attack_mask |= attack_square;
+            }
+        }
+        // black king
+        let mut king_bb = self.black_king;
+        while king_bb != 0 {
+            let start_square = 1 << pop_lsb(&mut king_bb);
+            attack_mask |= table.king_attacks[start_square];
+        }
+
+        attack_mask
     }
 }
 
@@ -1285,4 +1407,25 @@ mod tests {
         assert_eq!(board.black_rooks & 1 << Tables::A2 != 0, false);
         assert_eq!(board.white_pawns & 1 << Tables::A2 != 0, true);
     }
+
+    #[test]
+    fn white_attack_mask_pawn() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/7P/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x20000;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_knight() {
+        let board = BoardState::state_from_string_fen("8/8/8/3N4/8/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x28440044280000;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn get_black_attack_mask() {}
 }

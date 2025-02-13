@@ -383,7 +383,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
 
 #[inline]
 // Get and remove the lsb as a square index
-fn pop_lsb(bb: &mut u64) -> usize {
+pub fn pop_lsb(bb: &mut u64) -> usize {
     let lsb = bb.trailing_zeros() as usize;
     *bb ^= 1 << lsb;
     lsb
@@ -391,7 +391,7 @@ fn pop_lsb(bb: &mut u64) -> usize {
 
 #[inline]
 // Get the lsb as a square index
-fn lsb(bb: u64) -> usize {
+pub fn lsb(bb: u64) -> usize {
     bb.trailing_zeros() as usize
 }
 
