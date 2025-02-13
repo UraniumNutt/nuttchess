@@ -1,60 +1,103 @@
-#[derive(Debug, Copy, Clone)]
+// use crate::Tables;
+use crate::{generate::*, tables::Tables};
+use std::io::{self, Write};
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardState {
-    white_pawns: u64,
-    white_knights: u64,
-    white_rooks: u64,
-    white_bishops: u64,
-    white_queens: u64,
-    white_king: u64,
-    white_queenside_castle_rights: bool,
-    white_kingside_castle_rights: bool,
+    pub white_pawns: u64,
+    pub white_knights: u64,
+    pub white_rooks: u64,
+    pub white_bishops: u64,
+    pub white_queens: u64,
+    pub white_king: u64,
+    pub white_queenside_castle_rights: bool,
+    pub white_kingside_castle_rights: bool,
 
-    black_pawns: u64,
-    black_knights: u64,
-    black_rooks: u64,
-    black_bishops: u64,
-    black_queens: u64,
-    black_king: u64,
-    black_queenside_castle_rights: bool,
-    black_kingside_castle_rights: bool,
+    pub black_pawns: u64,
+    pub black_knights: u64,
+    pub black_rooks: u64,
+    pub black_bishops: u64,
+    pub black_queens: u64,
+    pub black_king: u64,
+    pub black_queenside_castle_rights: bool,
+    pub black_kingside_castle_rights: bool,
 
-    white_to_move: bool,
-    en_passant_target: u64,
-    reversable_move_counter: u8,
-    fullmove_counter: u16,
+    pub white_to_move: bool,
+    pub en_passant_target: u64,
+    pub reversable_move_counter: u8,
+    pub fullmove_counter: u16,
+    pub move_stack: Vec<MoveStackFrame>,
+    pub move_stack_pointer: usize,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug)]
 pub struct MoveRep {
-    starting_square: u64,
-    ending_square: u64,
-    promotion: Option<Promotion>,
+    pub starting_square: u64,
+    pub ending_square: u64,
+    pub promotion: Option<Promotion>,
+    pub moved_type: PieceType,
+    pub attacked_type: Option<PieceType>,
 }
 
-#[derive(Copy, Clone)]
-enum Promotion {
+impl MoveRep {
+    pub fn new(
+        starting_square: u64,
+        ending_square: u64,
+        promotion: Option<Promotion>,
+        piece_hint: PieceType,
+        attacked_type: Option<PieceType>,
+    ) -> MoveRep {
+        MoveRep {
+            starting_square,
+            ending_square,
+            promotion,
+            moved_type: piece_hint,
+            attacked_type,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Promotion {
     Queen,
     Bishop,
     Rook,
     Knight,
 }
 
-pub struct TreeNode {
-    pub board_state: BoardState,
-    pub applied_move: Option<MoveRep>,
-    pub children: Vec<TreeNode>,
+// Helps the move maker know what bitboard to manipulate
+#[derive(Copy, Clone, Debug)]
+pub enum PieceType {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
 }
 
-impl TreeNode {
-    pub fn get_leaf_nodes(&self) -> u64 {
-        if self.children.len() == 0 {
-            return 1;
+// Stores state of the board which can not be recovered when unmaking a move
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct MoveStackFrame {
+    en_passant_target: u64,
+    reversable_move_counter: u8,
+    fullmove_counter: u16,
+    white_queenside_castle_rights: bool,
+    white_kingside_castle_rights: bool,
+    black_queenside_castle_rights: bool,
+    black_kingside_castle_rights: bool,
+}
+
+impl MoveStackFrame {
+    fn new() -> MoveStackFrame {
+        MoveStackFrame {
+            en_passant_target: 0,
+            reversable_move_counter: 0,
+            fullmove_counter: 0,
+            white_queenside_castle_rights: true,
+            white_kingside_castle_rights: true,
+            black_queenside_castle_rights: true,
+            black_kingside_castle_rights: true,
         }
-        let mut count = 0;
-        for child in &self.children {
-            count += child.get_leaf_nodes();
-        }
-        count
     }
 }
 
@@ -83,6 +126,8 @@ impl BoardState {
             en_passant_target: 0x0,
             reversable_move_counter: 0,
             fullmove_counter: 0,
+            move_stack: vec![MoveStackFrame::new(); 0],
+            move_stack_pointer: 0,
         }
     }
 
@@ -110,25 +155,9 @@ impl BoardState {
             en_passant_target: 0,
             reversable_move_counter: 0,
             fullmove_counter: 0,
+            move_stack: vec![MoveStackFrame::new(); 0],
+            move_stack_pointer: 0,
         }
-    }
-
-    fn white_occupancy(&self) -> u64 {
-        self.white_pawns
-            | self.white_knights
-            | self.white_rooks
-            | self.white_bishops
-            | self.white_queens
-            | self.white_king
-    }
-
-    fn black_occupancy(&self) -> u64 {
-        self.black_pawns
-            | self.black_knights
-            | self.black_rooks
-            | self.black_bishops
-            | self.black_queens
-            | self.black_king
     }
 
     pub fn state_from_fen<'a>(
@@ -295,438 +324,366 @@ impl BoardState {
         Ok(state)
     }
 
-    pub fn apply_move(&self, play: &MoveRep) -> Result<BoardState, String> {
-        // Clear the starting posisition, and set then ending posistion
-        let (start_mask, end_mask, promotion) =
-            (&play.starting_square, &play.ending_square, &play.promotion);
-        let mut state = self.to_owned();
-        match start_mask {
-            // White
-
-            // Pawns
-            e if e & state.white_pawns != 0 => {
-                state.white_pawns &= !e;
-                state.white_pawns |= end_mask;
-            }
-
-            // Knights
-            e if e & state.white_knights != 0 => {
-                state.white_knights &= !e;
-                state.white_knights |= end_mask;
-            }
-
-            // Biships
-            e if e & state.white_bishops != 0 => {
-                state.white_bishops &= !e;
-                state.white_bishops |= end_mask;
-            }
-
-            // Rooks
-            e if e & state.white_rooks != 0 => {
-                state.white_rooks &= !e;
-                state.white_rooks |= end_mask;
-            }
-
-            // Queens
-            e if e & state.white_queens != 0 => {
-                state.white_queens &= !e;
-                state.white_queens |= end_mask;
-            }
-
-            // Kings
-            e if e & state.white_king != 0 => {
-                state.white_king &= !e;
-                state.white_king |= end_mask;
-            }
-
-            // Black
-
-            // Pawns
-            e if e & state.black_pawns != 0 => {
-                state.black_pawns &= !e;
-                state.black_pawns |= end_mask;
-            }
-
-            // Knights
-            e if e & state.black_knights != 0 => {
-                state.black_knights &= !e;
-                state.black_knights |= end_mask;
-            }
-
-            // Biships
-            e if e & state.black_bishops != 0 => {
-                state.black_bishops &= !e;
-                state.black_bishops |= end_mask;
-            }
-
-            // Rooks
-            e if e & state.black_rooks != 0 => {
-                state.black_rooks &= !e;
-                state.black_rooks |= end_mask;
-            }
-
-            // Queens
-            e if e & state.black_queens != 0 => {
-                state.black_queens &= !e;
-                state.black_queens |= end_mask;
-            }
-
-            // Kings
-            e if e & state.black_king != 0 => {
-                state.black_king &= !e;
-                state.black_king |= end_mask;
-            }
-
-            // TODO implement some formating so we can print the play
-            // _ => return Err(format!("No piece for move {}", play)),
-            _ => return Err("No target piece found".to_string()),
-        }
-
-        // Before returning, change the side to move
-        state.white_to_move = !state.white_to_move;
-        Ok(state)
+    pub fn state_from_string_fen(fen_string: String) -> BoardState {
+        let mut tokens = fen_string.split(" ");
+        BoardState::state_from_fen(tokens).unwrap()
     }
 
-    pub fn search(self, depth: u64) -> Option<TreeNode> {
-        if depth == 0 {
-            return None;
+    fn move_rep_from_masks(&self, start: u64, end: u64) -> MoveRep {
+        let moved_piece = self.get_piece_type(start);
+        let attacked_piece = self.get_piece_type(end);
+        MoveRep {
+            starting_square: start,
+            ending_square: end,
+            promotion: None,
+            moved_type: moved_piece.unwrap(),
+            attacked_type: attacked_piece,
         }
-
-        let mut children: Vec<TreeNode> = vec![];
-        let child_moves = self.generate_moves();
-        for child_move in child_moves {
-            let child_node = self.apply_move(&child_move).unwrap().search(depth - 1);
-            let node = TreeNode {
-                board_state: self.apply_move(&child_move).unwrap(),
-                applied_move: Some(child_move),
-                children: match child_node {
-                    Some(e) => e.children,
-                    None => vec![],
-                },
-            };
-            children.push(node);
-        }
-        let tree = TreeNode {
-            board_state: self,
-            applied_move: None,
-            children: children,
-        };
-        Some(tree)
     }
 
-    // generate the moves from a given position
-    pub fn generate_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
+    pub fn apply_string_move(&mut self, play: String) {
+        let char1 = play.chars().nth(0).unwrap();
+        let char2 = play.chars().nth(1).unwrap();
+        let char3 = play.chars().nth(2).unwrap();
+        let char4 = play.chars().nth(3).unwrap();
 
-        // Generate pawn moves
-        // match self.white_to_move {
-        //     // white pawns
-        //     true => moves.append(&mut self.white_pawn_moves()),
-        //     // black pawns
-        //     false => moves.append(&mut self.black_pawn_moves()),
-        // }
-
-        // Knight moves
-        moves.append(&mut self.knight_moves());
-
-        moves
+        let start = position_to_mask(char1, char2).unwrap();
+        let end = position_to_mask(char3, char4).unwrap();
+        let move_rep = self.move_rep_from_masks(start, end);
+        self.make(&move_rep);
     }
 
-    fn knight_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
+    // Changes the board state to reflect the move. Also pushes to the move stack
+    pub fn make(&mut self, play: &MoveRep) {
+        self.clear(play.starting_square, Some(play.moved_type));
+        self.clear_all(play.ending_square);
+        // self.clear_all(play.ending_square);
+        self.set(play.ending_square, Some(play.moved_type));
+        // Do special logic here
+        self.white_to_move = !self.white_to_move;
+    }
 
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
+    // Clear all bitboards at this mask
+    #[inline]
+    fn clear_all(&mut self, bb: u64) {
+        self.white_pawns &= !bb;
+        self.white_knights &= !bb;
+        self.white_bishops &= !bb;
+        self.white_rooks &= !bb;
+        self.white_queens &= !bb;
+        self.white_king &= !bb;
+
+        self.black_pawns &= !bb;
+        self.black_knights &= !bb;
+        self.black_bishops &= !bb;
+        self.black_rooks &= !bb;
+        self.black_queens &= !bb;
+        self.black_king &= !bb;
+    }
+
+    // Clear bitboards for this value
+    #[inline]
+    fn clear(&mut self, bb: u64, attacked: Option<PieceType>) {
+        if let Some(piece) = attacked {
             if self.white_to_move {
-                if mask & self.white_knights != 0 {
-                    let start = mask;
-                    // case '1'
-                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 15;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '2'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
-                        let end = mask << 6;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '3'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
-                        let end = mask >> 10;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '4'
-                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 17;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '5'
-                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 15;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '6'
-                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
-                        let end = mask >> 6;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '7'
-                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
-                        let end = mask << 10;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '8'
-                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 17;
-                        if end & self.white_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
+                match piece {
+                    PieceType::Pawn => self.white_pawns &= !bb,
+                    PieceType::Knight => self.white_knights &= !bb,
+                    PieceType::Bishop => self.white_bishops &= !bb,
+                    PieceType::Rook => self.white_rooks &= !bb,
+                    PieceType::Queen => self.white_queens &= !bb,
+                    PieceType::King => self.white_king &= !bb,
                 }
             } else {
-                if mask & self.black_knights != 0 {
-                    let start = mask;
-                    // case '1'
-                    if !rank_h(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 15;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '2'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_8(mask) {
-                        let end = mask << 6;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '3'
-                    if !(rank_h(mask) || rank_g(mask)) && !file_1(mask) {
-                        let end = mask >> 10;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '4'
-                    if !rank_h(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 17;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '5'
-                    if !rank_a(mask) && !(file_1(mask) || file_2(mask)) {
-                        let end = mask >> 15;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '6'
-                    if !(rank_a(mask) && rank_b(mask)) && !file_1(mask) {
-                        let end = mask >> 6;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '7'
-                    if !(rank_a(mask) || rank_b(mask)) && !file_8(mask) {
-                        let end = mask << 10;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
-                    // case '8'
-                    if !rank_a(mask) && !(file_7(mask) || file_8(mask)) {
-                        let end = mask << 17;
-                        if end & self.black_occupancy() == 0 {
-                            moves.push(MoveRep {
-                                starting_square: start,
-                                ending_square: end,
-                                promotion: None,
-                            })
-                        }
-                    }
+                match piece {
+                    PieceType::Pawn => self.black_pawns &= !bb,
+                    PieceType::Knight => self.black_knights &= !bb,
+                    PieceType::Bishop => self.black_bishops &= !bb,
+                    PieceType::Rook => self.black_rooks &= !bb,
+                    PieceType::Queen => self.black_queens &= !bb,
+                    PieceType::King => self.black_king &= !bb,
+                }
+            }
+        } else {
+            return;
+        }
+    }
+
+    #[inline]
+    fn set(&mut self, bb: u64, present_piece: Option<PieceType>) {
+        if let Some(piece) = present_piece {
+            if self.white_to_move {
+                match piece {
+                    PieceType::Pawn => self.white_pawns |= bb,
+                    PieceType::Knight => self.white_knights |= bb,
+                    PieceType::Bishop => self.white_bishops |= bb,
+                    PieceType::Rook => self.white_rooks |= bb,
+                    PieceType::Queen => self.white_queens |= bb,
+                    PieceType::King => self.white_king |= bb,
+                }
+            } else {
+                match piece {
+                    PieceType::Pawn => self.black_pawns |= bb,
+                    PieceType::Knight => self.black_knights |= bb,
+                    PieceType::Bishop => self.black_bishops |= bb,
+                    PieceType::Rook => self.black_rooks |= bb,
+                    PieceType::Queen => self.black_queens |= bb,
+                    PieceType::King => self.black_king |= bb,
                 }
             }
         }
-        moves
     }
 
-    fn black_pawn_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
+    // Reverts the move from the board. Pops from the move stack
+    pub fn unmake(&mut self, play: &MoveRep) {
+        // Something is going wrong in unmake
+        // it only happens when attacked is none
+        let first_count = self.occupancy().count_ones();
+        // I guess swapping the order of the next two lines fixed it?
+        self.set(play.ending_square, play.attacked_type);
+        // Put this after the first set because we want to replace the opponents piece
+        self.white_to_move = !self.white_to_move;
+        self.clear(play.ending_square, Some(play.moved_type));
+        self.set(play.starting_square, Some(play.moved_type));
+        let second_count = self.occupancy().count_ones();
+        if play.attacked_type.is_none() {
+            if second_count != first_count {
+                let piece_string = match play.moved_type {
+                    PieceType::Pawn => "pawn",
+                    PieceType::Knight => "knight",
 
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
-
-            // If there is no pawn there, go skip
-            if mask & self.black_pawns == 0 {
-                continue;
+                    _ => "",
+                };
+                let color = match self.white_to_move {
+                    true => "white",
+                    false => "black",
+                };
+                let attacked = match play.attacked_type {
+                    Some(_) => "some",
+                    None => "none",
+                };
+                // print_bitboard(self.occupancy());
+                // println!("{}", piece_string);
+                // println!("{}", color);
+                // println!("{}", attacked);
+                // panic!();
             }
-
-            // Single push
-            let start = mask;
-            let end = mask >> 8;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-            // Double push
-            let start = mask;
-            let end = mask >> 16;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
         }
-        moves
     }
 
-    fn white_pawn_moves(&self) -> Vec<MoveRep> {
-        let mut moves = Vec::new();
+    #[inline]
+    pub fn white_occupancy(&self) -> u64 {
+        self.white_pawns
+            | self.white_knights
+            | self.white_bishops
+            | self.white_rooks
+            | self.white_queens
+            | self.white_king
+    }
 
-        for shift_value in 0..64 {
-            let mask = 1 << shift_value;
+    #[inline]
+    pub fn black_occupancy(&self) -> u64 {
+        self.black_pawns
+            | self.black_knights
+            | self.black_bishops
+            | self.black_rooks
+            | self.black_queens
+            | self.black_king
+    }
 
-            // If there is no pawn there, go skip
-            if mask & self.white_pawns == 0 {
-                continue;
+    #[inline]
+    pub fn occupancy(&self) -> u64 {
+        self.white_pawns
+            | self.white_knights
+            | self.white_bishops
+            | self.white_rooks
+            | self.white_queens
+            | self.white_king
+            | self.black_pawns
+            | self.black_knights
+            | self.black_bishops
+            | self.black_rooks
+            | self.black_queens
+            | self.black_king
+    }
+
+    #[inline]
+    // Gets the type of piece present at the mask
+    pub fn get_piece_type(&self, mask: u64) -> Option<PieceType> {
+        if self.white_pawns & mask != 0 || self.black_pawns & mask != 0 {
+            return Some(PieceType::Pawn);
+        }
+        if self.white_knights & mask != 0 || self.black_knights & mask != 0 {
+            return Some(PieceType::Knight);
+        }
+        if self.white_bishops & mask != 0 || self.white_bishops & mask != 0 {
+            return Some(PieceType::Bishop);
+        }
+        if self.white_rooks & mask != 0 || self.white_rooks & mask != 0 {
+            return Some(PieceType::Rook);
+        }
+        if self.white_queens & mask != 0 || self.white_queens & mask != 0 {
+            return Some(PieceType::Queen);
+        }
+        if self.white_king & mask != 0 || self.white_king & mask != 0 {
+            return Some(PieceType::King);
+        }
+
+        None
+    }
+
+    // Get the attack map of white
+    pub fn white_attack_mask(&self, table: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        // White pawns
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= table.white_pawn_attacks[start_square];
+        }
+
+        // White knights
+        let mut knight_bb = self.white_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= table.knight_attacks[start_square];
+        }
+
+        // White bishops
+        let mut bishop_bb = self.white_bishops;
+        while bishop_bb != 0 {
+            let start_square = pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
+                attack_mask |= attack_square;
             }
-
-            // Single push
-            let start = mask;
-            let end = mask << 8;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
-            // Double push
-            let start = mask;
-            let end = mask << 16;
-            moves.push(MoveRep {
-                starting_square: start,
-                ending_square: end,
-                promotion: None,
-            });
         }
-        moves
+        // White rooks
+        let mut rook_bb = self.white_rooks;
+        while rook_bb != 0 {
+            let start_square = pop_lsb(&mut rook_bb);
+            let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // White queens
+
+        let mut bishop_bb_part = self.white_queens;
+        while bishop_bb_part != 0 {
+            let start_square = pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.white_queens;
+        while rook_bb_part != 0 {
+            let start_square = pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // White king
+        let mut king_bb = self.white_king;
+        while king_bb != 0 {
+            let start_square = pop_lsb(&mut king_bb);
+            attack_mask |= table.king_attacks[start_square];
+        }
+
+        attack_mask
     }
 
-    pub fn apply_string_move(&self, chess_move: &str) -> Result<BoardState, String> {
-        // Get a bitboard mask of the starting move
-        let start_mask = position_to_mask(
-            chess_move.chars().nth(0).unwrap(),
-            chess_move.chars().nth(1).unwrap(),
-        )
-        .unwrap();
-        // Get a bitboard mask of the ending move
-        let end_mask = position_to_mask(
-            chess_move.chars().nth(2).unwrap(),
-            chess_move.chars().nth(3).unwrap(),
-        )
-        .unwrap();
+    // Get the attack map of black
+    pub fn black_attack_mask(&self, table: &Tables) -> u64 {
+        let mut attack_mask = 0;
 
-        let play = MoveRep {
-            starting_square: start_mask,
-            ending_square: end_mask,
-            promotion: None,
-        };
+        // black pawns
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= table.black_pawn_attacks[start_square];
+        }
 
-        self.apply_move(&play)
+        // black knights
+        let mut knight_bb = self.black_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= table.knight_attacks[start_square];
+        }
+
+        // black bishops
+        let mut bishop_bb = self.black_bishops;
+        while bishop_bb != 0 {
+            let start_square = pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+        // black rooks
+        let mut rook_bb = self.black_rooks;
+        while rook_bb != 0 {
+            let start_square = pop_lsb(&mut rook_bb);
+            let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // black queens
+
+        let mut bishop_bb_part = self.black_queens;
+        while bishop_bb_part != 0 {
+            let start_square = pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            while bishop_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.black_queens;
+        while rook_bb_part != 0 {
+            let start_square = pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
+            while rook_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // black king
+        let mut king_bb = self.black_king;
+        while king_bb != 0 {
+            let start_square = pop_lsb(&mut king_bb);
+            attack_mask |= table.king_attacks[start_square];
+        }
+
+        attack_mask
     }
 
-    pub fn print_board(&self) {
-        println!("{:#018x}: white pawns", self.white_pawns);
-        println!("{:#018x}: white knights", self.white_knights);
-        println!("{:#018x}: white bishops", self.white_bishops);
-        println!("{:#018x}: white rooks", self.white_rooks);
-        println!("{:#018x}: white queens", self.white_queens);
-        println!("{:#018x}: white king", self.white_king);
+    // Get if the white king is in check
+    pub fn white_in_check(&self, table: &Tables) -> bool {
+        let black_attack_mask = self.black_attack_mask(table);
+        black_attack_mask & self.white_king != 0
+    }
 
-        println!("{:#018x}: black pawns", self.black_pawns);
-        println!("{:#018x}: black knights", self.black_knights);
-        println!("{:#018x}: black bishops", self.black_bishops);
-        println!("{:#018x}: black rooks", self.black_rooks);
-        println!("{:#018x}: black queens", self.black_queens);
-        println!("{:#018x}: black king", self.black_king);
-
-        println!("{:#018x}: en passant target", self.en_passant_target);
+    // Get if the black king is in check
+    pub fn black_in_check(&self, table: &Tables) -> bool {
+        let white_attack_mask = self.white_attack_mask(table);
+        white_attack_mask & self.black_king != 0
     }
 }
 
@@ -740,7 +697,7 @@ impl MoveRep {
         Ok(mov)
     }
 
-    fn mask_to_string(mask: u64) -> Result<String, String> {
+    pub fn mask_to_string(mask: u64) -> Result<String, String> {
         let mut pos = String::new();
 
         let file = mask.ilog2() / 8;
@@ -772,56 +729,6 @@ impl MoveRep {
     }
 }
 
-fn rank_a(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 7;
-}
-fn rank_b(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 6;
-}
-fn rank_c(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 5;
-}
-fn rank_d(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 4;
-}
-fn rank_e(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 3;
-}
-fn rank_f(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 2;
-}
-fn rank_g(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 1;
-}
-fn rank_h(mask: u64) -> bool {
-    return mask.ilog2() % 8 == 0;
-}
-
-fn file_1(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 0;
-}
-fn file_2(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 1;
-}
-fn file_3(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 2;
-}
-fn file_4(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 3;
-}
-fn file_5(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 4;
-}
-fn file_6(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 5;
-}
-fn file_7(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 6;
-}
-fn file_8(mask: u64) -> bool {
-    return mask.ilog2() / 8 == 7;
-}
-
 fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
     let file_shift = match file {
         'h' => 0,
@@ -841,4 +748,902 @@ fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
         return Err(format!("Unrecognized value \"{}\" found in rank", rank));
     }
     Ok((1 << file_shift) << ((rank_shift - 1) * 8))
+}
+
+pub fn print_bitboard(bb: u64) {
+    fn get_bit(bb: u64, index: u64) -> char {
+        match bb & 1 << index {
+            0 => '0',
+            _ => '1',
+        }
+    }
+    println!(
+        "8   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 63),
+        get_bit(bb, 62),
+        get_bit(bb, 61),
+        get_bit(bb, 60),
+        get_bit(bb, 59),
+        get_bit(bb, 58),
+        get_bit(bb, 57),
+        get_bit(bb, 56)
+    );
+
+    println!(
+        "7   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 55),
+        get_bit(bb, 54),
+        get_bit(bb, 53),
+        get_bit(bb, 52),
+        get_bit(bb, 51),
+        get_bit(bb, 50),
+        get_bit(bb, 49),
+        get_bit(bb, 48)
+    );
+
+    println!(
+        "6   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 47),
+        get_bit(bb, 46),
+        get_bit(bb, 45),
+        get_bit(bb, 44),
+        get_bit(bb, 43),
+        get_bit(bb, 42),
+        get_bit(bb, 41),
+        get_bit(bb, 40)
+    );
+
+    println!(
+        "5   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 39),
+        get_bit(bb, 38),
+        get_bit(bb, 37),
+        get_bit(bb, 36),
+        get_bit(bb, 35),
+        get_bit(bb, 34),
+        get_bit(bb, 33),
+        get_bit(bb, 32)
+    );
+
+    println!(
+        "4   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 31),
+        get_bit(bb, 30),
+        get_bit(bb, 29),
+        get_bit(bb, 28),
+        get_bit(bb, 27),
+        get_bit(bb, 26),
+        get_bit(bb, 25),
+        get_bit(bb, 24)
+    );
+
+    println!(
+        "3   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 23),
+        get_bit(bb, 22),
+        get_bit(bb, 21),
+        get_bit(bb, 20),
+        get_bit(bb, 19),
+        get_bit(bb, 18),
+        get_bit(bb, 17),
+        get_bit(bb, 16)
+    );
+
+    println!(
+        "2   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 15),
+        get_bit(bb, 14),
+        get_bit(bb, 13),
+        get_bit(bb, 12),
+        get_bit(bb, 11),
+        get_bit(bb, 10),
+        get_bit(bb, 9),
+        get_bit(bb, 8)
+    );
+
+    println!(
+        "1   {} {} {} {} {} {} {} {}",
+        get_bit(bb, 7),
+        get_bit(bb, 6),
+        get_bit(bb, 5),
+        get_bit(bb, 4),
+        get_bit(bb, 3),
+        get_bit(bb, 2),
+        get_bit(bb, 1),
+        get_bit(bb, 0)
+    );
+
+    println!("\n    a b c d e f g h");
+    io::stdout().flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tables::Tables;
+
+    use super::*;
+
+    #[test]
+    fn test_white_pawn_push() {
+        let mut pawn_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A2,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        pawn_test.make(&move_test);
+
+        assert_eq!(pawn_test.white_to_move, false);
+        assert_eq!(pawn_test.white_pawns & 1 << Tables::A4 != 0, true);
+        assert_eq!(pawn_test.white_pawns & 1 << Tables::A2 != 0, false);
+    }
+
+    #[test]
+    fn test_black_pawn_push() {
+        let mut black_pawn_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D7,
+            ending_square: 1 << Tables::D5,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        black_pawn_test.make(&move_test);
+
+        assert_eq!(black_pawn_test.white_to_move, true);
+        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D7 != 0, false);
+        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D5 != 0, true);
+    }
+
+    #[test]
+    fn test_black_pawn_attack() {
+        let mut black_pawn_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/1P6/8/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A7,
+            ending_square: 1 << Tables::B6,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        black_pawn_attack_test.make(&move_test);
+
+        assert_eq!(black_pawn_attack_test.white_to_move, true);
+        assert_eq!(
+            black_pawn_attack_test.black_pawns & 1 << Tables::A7 != 0,
+            false
+        );
+        assert_eq!(
+            black_pawn_attack_test.black_pawns & 1 << Tables::B6 != 0,
+            true
+        );
+        assert_eq!(
+            black_pawn_attack_test.white_pawns & 1 << Tables::B6 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn test_white_pawn_attack() {
+        let mut pawn_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B2,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        pawn_attack_test.make(&move_test);
+
+        assert_eq!(pawn_attack_test.white_to_move, false);
+        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::B2 != 0, false);
+        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::C3 != 0, true);
+        assert_eq!(pawn_attack_test.black_pawns & 1 << Tables::C3 != 0, false);
+    }
+
+    #[test]
+    fn test_white_knight() {
+        let mut knight_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B2,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        knight_test.make(&move_test);
+
+        assert_eq!(knight_test.white_to_move, false);
+        assert_eq!(knight_test.white_knights & 1 << Tables::A3 != 0, true);
+        assert_eq!(knight_test.white_knights & 1 << Tables::B2 != 0, false);
+    }
+
+    #[test]
+    fn test_black_knight() {
+        let mut black_knight_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B8,
+            ending_square: 1 << Tables::A6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        black_knight_test.make(&move_test);
+
+        assert_eq!(black_knight_test.white_to_move, true);
+        assert_eq!(
+            black_knight_test.black_knights & 1 << Tables::B8 != 0,
+            false
+        );
+        assert_eq!(black_knight_test.black_knights & 1 << Tables::A6 != 0, true);
+    }
+
+    #[test]
+    fn test_white_knight_attack() {
+        let mut white_knight_attack = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B1,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        white_knight_attack.make(&move_test);
+
+        assert_eq!(white_knight_attack.white_to_move, false);
+        assert_eq!(
+            white_knight_attack.white_knights & 1 << Tables::B1 != 0,
+            false
+        );
+        assert_eq!(
+            white_knight_attack.white_knights & 1 << Tables::C3 != 0,
+            true
+        );
+        assert_eq!(
+            white_knight_attack.black_pawns & 1 << Tables::C3 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn test_black_knight_attack() {
+        let mut black_knight_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/2P5/8/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B8,
+            ending_square: 1 << Tables::C6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        black_knight_attack_test.make(&move_test);
+
+        assert_eq!(black_knight_attack_test.white_to_move, true);
+        assert_eq!(
+            black_knight_attack_test.black_knights & 1 << Tables::B8 != 0,
+            false
+        );
+        assert_eq!(
+            black_knight_attack_test.black_knights & 1 << Tables::C6 != 0,
+            true
+        );
+        assert_eq!(
+            black_knight_attack_test.white_pawns & 1 << Tables::C6 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn white_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, true);
+    }
+
+    #[test]
+    fn black_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, true);
+    }
+
+    #[test]
+    fn white_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/p7/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A4 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::A4 != 0, false);
+    }
+
+    #[test]
+    fn black_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/P7/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A4 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::A4 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_pawn_push() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D2,
+            ending_square: 1 << Tables::D4,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D4 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_pawn_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pp1ppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D2,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::C3 != 0, false);
+        print_bitboard(board.black_pawns);
+        assert_eq!(board.black_pawns & 1 << Tables::C3 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_pawn_push() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::H7,
+            ending_square: 1 << Tables::H5,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_pawns & 1 << Tables::H7 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::H5 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_pawn_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/P7/8/8/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B7,
+            ending_square: 1 << Tables::A6,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_pawns & 1 << Tables::B7 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::A6 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::A6 != 0, true);
+    }
+
+    #[test]
+    fn unmake_white_knight_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G1,
+            ending_square: 1 << Tables::H3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
+        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_knight_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pp1ppppp/8/8/8/5p2/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G1,
+            ending_square: 1 << Tables::H3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
+        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
+        assert_eq!(board.black_pawns & 1 << Tables::H3 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_knight_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G8,
+            ending_square: 1 << Tables::F6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
+        assert_eq!(board.black_knights & 1 << Tables::F6 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_knight_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/7P/8/8/8/PPPPP1PP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G8,
+            ending_square: 1 << Tables::H6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
+        assert_eq!(board.black_knights & 1 << Tables::H6 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::H6 != 0, true);
+    }
+
+    #[test]
+    fn unmake_white_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/p7/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
+        assert_eq!(board.black_pawns & 1 << Tables::A5 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A2,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A2 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::A2 != 0, true);
+    }
+
+    #[test]
+    fn white_attack_mask_pawn() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/7P/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x20000;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_knight() {
+        let board = BoardState::state_from_string_fen("8/8/8/3N4/8/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x28440044280000;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_rook() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/8/3R4 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x10101010101010ef;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_rook_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3P4/8/8/3R4 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x28101010ef;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_bishop() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/8/8/8/5B2 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x804020110a00;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_bishop_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/2P5/8/8/5B2 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x5020110a00;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_queen() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3Q4/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x11925438ef385492;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attack_mask_starting_pos() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 0xffff7e;
+        let result = board.white_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_pawn() {
+        let board = BoardState::state_from_string_fen("8/8/3p4/8/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x2800000000;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_knight() {
+        let board = BoardState::state_from_string_fen("8/8/3n4/8/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x2844004428000000;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_rook() {
+        let board = BoardState::state_from_string_fen("8/8/8/3r4/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x101010ef10101010;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_rook_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/3r1p2/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x101010ec1a101010;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_bishop() {
+        let board = BoardState::state_from_string_fen("8/8/8/3b4/8/8/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x8244280028448201;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_bishop_with_blocker() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/2p5/8/8/5b2 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x20510a00;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attack_mask_queen() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/3q4/8/8/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let expected = 0x11925438ef385492;
+        let result = board.black_attack_mask(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pp1ppppp/2p5/q7/3P4/4P3/PPP2PPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkb1r/pppppppp/8/8/8/5n2/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_in_check_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pppppppp/8/8/4q3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.white_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbq1bnr/ppppkppp/8/3Np3/8/8/PPPPPPPP/R1BQKBNR b KQ - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/3N4/8/8/8/PPPPPPPP/R1BQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = true;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_in_check_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/3Q4/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = false;
+        let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
 }
