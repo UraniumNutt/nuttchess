@@ -1,10 +1,7 @@
-use std::{
-    future::Pending,
-    io::{self, Write},
-    process::Output,
-};
-
-#[derive(Clone)]
+// use crate::Tables;
+use crate::Tables;
+use std::io::{self, Write};
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardState {
     pub white_pawns: u64,
     pub white_knights: u64,
@@ -79,7 +76,7 @@ pub enum PieceType {
 }
 
 // Stores state of the board which can not be recovered when unmaking a move
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MoveStackFrame {
     en_passant_target: u64,
     reversable_move_counter: u8,
@@ -346,6 +343,11 @@ impl BoardState {
         Ok(state)
     }
 
+    pub fn state_from_string_fen(fen_string: String) -> BoardState {
+        let mut tokens = fen_string.split(" ");
+        BoardState::state_from_fen(tokens).unwrap()
+    }
+
     fn move_rep_from_masks(&self, start: u64, end: u64) -> MoveRep {
         let moved_piece = self.get_piece_type(start);
         let attacked_piece = self.get_piece_type(end);
@@ -374,6 +376,7 @@ impl BoardState {
     pub fn make(&mut self, play: &MoveRep) {
         self.clear(play.starting_square, Some(play.moved_type));
         self.clear_all(play.ending_square);
+        // self.clear_all(play.ending_square);
         self.set(play.ending_square, Some(play.moved_type));
         // Do special logic here
         self.white_to_move = !self.white_to_move;
@@ -455,9 +458,10 @@ impl BoardState {
         // Something is going wrong in unmake
         // it only happens when attacked is none
         let first_count = self.occupancy().count_ones();
-        self.white_to_move = !self.white_to_move;
         // I guess swapping the order of the next two lines fixed it?
         self.set(play.ending_square, play.attacked_type);
+        // Put this after the first set because we want to replace the opponents piece
+        self.white_to_move = !self.white_to_move;
         self.clear(play.ending_square, Some(play.moved_type));
         self.set(play.starting_square, Some(play.moved_type));
         let second_count = self.occupancy().count_ones();
@@ -716,4 +720,568 @@ pub fn print_bitboard(bb: u64) {
 
     println!("\n    a b c d e f g h");
     io::stdout().flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_white_pawn_push() {
+        let mut pawn_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A2,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        pawn_test.make(&move_test);
+
+        assert_eq!(pawn_test.white_to_move, false);
+        assert_eq!(pawn_test.white_pawns & 1 << Tables::A4 != 0, true);
+        assert_eq!(pawn_test.white_pawns & 1 << Tables::A2 != 0, false);
+    }
+
+    #[test]
+    fn test_black_pawn_push() {
+        let mut black_pawn_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D7,
+            ending_square: 1 << Tables::D5,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        black_pawn_test.make(&move_test);
+
+        assert_eq!(black_pawn_test.white_to_move, true);
+        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D7 != 0, false);
+        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D5 != 0, true);
+    }
+
+    #[test]
+    fn test_black_pawn_attack() {
+        let mut black_pawn_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/1P6/8/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A7,
+            ending_square: 1 << Tables::B6,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        black_pawn_attack_test.make(&move_test);
+
+        assert_eq!(black_pawn_attack_test.white_to_move, true);
+        assert_eq!(
+            black_pawn_attack_test.black_pawns & 1 << Tables::A7 != 0,
+            false
+        );
+        assert_eq!(
+            black_pawn_attack_test.black_pawns & 1 << Tables::B6 != 0,
+            true
+        );
+        assert_eq!(
+            black_pawn_attack_test.white_pawns & 1 << Tables::B6 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn test_white_pawn_attack() {
+        let mut pawn_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B2,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        pawn_attack_test.make(&move_test);
+
+        assert_eq!(pawn_attack_test.white_to_move, false);
+        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::B2 != 0, false);
+        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::C3 != 0, true);
+        assert_eq!(pawn_attack_test.black_pawns & 1 << Tables::C3 != 0, false);
+    }
+
+    #[test]
+    fn test_white_knight() {
+        let mut knight_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B2,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        knight_test.make(&move_test);
+
+        assert_eq!(knight_test.white_to_move, false);
+        assert_eq!(knight_test.white_knights & 1 << Tables::A3 != 0, true);
+        assert_eq!(knight_test.white_knights & 1 << Tables::B2 != 0, false);
+    }
+
+    #[test]
+    fn test_black_knight() {
+        let mut black_knight_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B8,
+            ending_square: 1 << Tables::A6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        black_knight_test.make(&move_test);
+
+        assert_eq!(black_knight_test.white_to_move, true);
+        assert_eq!(
+            black_knight_test.black_knights & 1 << Tables::B8 != 0,
+            false
+        );
+        assert_eq!(black_knight_test.black_knights & 1 << Tables::A6 != 0, true);
+    }
+
+    #[test]
+    fn test_white_knight_attack() {
+        let mut white_knight_attack = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B1,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        white_knight_attack.make(&move_test);
+
+        assert_eq!(white_knight_attack.white_to_move, false);
+        assert_eq!(
+            white_knight_attack.white_knights & 1 << Tables::B1 != 0,
+            false
+        );
+        assert_eq!(
+            white_knight_attack.white_knights & 1 << Tables::C3 != 0,
+            true
+        );
+        assert_eq!(
+            white_knight_attack.black_pawns & 1 << Tables::C3 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn test_black_knight_attack() {
+        let mut black_knight_attack_test = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/2P5/8/8/8/P1PPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B8,
+            ending_square: 1 << Tables::C6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        black_knight_attack_test.make(&move_test);
+
+        assert_eq!(black_knight_attack_test.white_to_move, true);
+        assert_eq!(
+            black_knight_attack_test.black_knights & 1 << Tables::B8 != 0,
+            false
+        );
+        assert_eq!(
+            black_knight_attack_test.black_knights & 1 << Tables::C6 != 0,
+            true
+        );
+        assert_eq!(
+            black_knight_attack_test.white_pawns & 1 << Tables::C6 != 0,
+            false
+        );
+    }
+
+    #[test]
+    fn white_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, true);
+    }
+
+    #[test]
+    fn black_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, true);
+    }
+
+    #[test]
+    fn white_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/p7/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
+        assert_eq!(board.white_rooks & 1 << Tables::A4 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::A4 != 0, false);
+    }
+
+    #[test]
+    fn black_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/P7/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A4,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A4 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::A4 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_pawn_push() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D2,
+            ending_square: 1 << Tables::D4,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D4 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_pawn_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pp1ppppp/8/8/8/2p5/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::D2,
+            ending_square: 1 << Tables::C3,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
+        assert_eq!(board.white_pawns & 1 << Tables::C3 != 0, false);
+        print_bitboard(board.black_pawns);
+        assert_eq!(board.black_pawns & 1 << Tables::C3 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_pawn_push() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::H7,
+            ending_square: 1 << Tables::H5,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: None,
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_pawns & 1 << Tables::H7 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::H5 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_pawn_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/P7/8/8/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let move_test = MoveRep {
+            starting_square: 1 << Tables::B7,
+            ending_square: 1 << Tables::A6,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&move_test);
+        board.unmake(&move_test);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_pawns & 1 << Tables::B7 != 0, true);
+        assert_eq!(board.black_pawns & 1 << Tables::A6 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::A6 != 0, true);
+    }
+
+    #[test]
+    fn unmake_white_knight_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G1,
+            ending_square: 1 << Tables::H3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
+        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_knight_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pp1ppppp/8/8/8/5p2/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G1,
+            ending_square: 1 << Tables::H3,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
+        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
+        assert_eq!(board.black_pawns & 1 << Tables::H3 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_knight_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G8,
+            ending_square: 1 << Tables::F6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
+        assert_eq!(board.black_knights & 1 << Tables::F6 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_knight_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/7P/8/8/8/PPPPP1PP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::G8,
+            ending_square: 1 << Tables::H6,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
+        assert_eq!(board.black_knights & 1 << Tables::H6 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::H6 != 0, true);
+    }
+
+    #[test]
+    fn unmake_white_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
+    }
+
+    #[test]
+    fn unmake_white_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/p7/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A1,
+            ending_square: 1 << Tables::A5,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
+        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
+        assert_eq!(board.black_pawns & 1 << Tables::A5 != 0, true);
+    }
+
+    #[test]
+    fn unmake_black_rook_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A3,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: None,
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, false);
+    }
+
+    #[test]
+    fn unmake_black_rook_attack() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let test_move = MoveRep {
+            starting_square: 1 << Tables::A8,
+            ending_square: 1 << Tables::A2,
+            promotion: None,
+            moved_type: PieceType::Rook,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        board.make(&test_move);
+        board.unmake(&test_move);
+
+        assert_eq!(board.white_to_move, false);
+        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
+        assert_eq!(board.black_rooks & 1 << Tables::A2 != 0, false);
+        assert_eq!(board.white_pawns & 1 << Tables::A2 != 0, true);
+    }
 }
