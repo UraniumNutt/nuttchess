@@ -8,8 +8,13 @@ pub fn perft(board: &mut BoardState, depth: usize) {
     for lower_move in top_moves {
         if let Ok(move_name) = lower_move.to_string() {
             board.make(&lower_move);
-            let lower_node_count = perft_search(board, &tables, depth - 1);
-            total_node_count += lower_node_count;
+            let mut lower_node_count = 0;
+            if !(board.white_in_check(&tables) && !board.white_to_move)
+                && !(board.black_in_check(&tables) && board.white_to_move)
+            {
+                lower_node_count = perft_search(board, &tables, depth - 1);
+                total_node_count += lower_node_count;
+            }
             board.unmake(&lower_move);
 
             println!("{} {}", move_name, lower_node_count);
@@ -28,7 +33,11 @@ pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> us
     let moves = generate(board, &tables);
     for mv in moves {
         board.make(&mv);
-        node_count += perft_search(board, &tables, depth - 1);
+        if !(board.white_in_check(&tables) && !board.white_to_move)
+            && !(board.black_in_check(&tables) && board.white_to_move)
+        {
+            node_count += perft_search(board, &tables, depth - 1);
+        }
         board.unmake(&mv);
     }
     return node_count;
@@ -72,6 +81,15 @@ mod tests {
 
         let node_count = perft_search(&mut board, &tables, 3);
         assert_eq!(node_count, 8902);
+    }
+
+    #[test]
+    fn depth_4() {
+        let mut board = BoardState::starting_state();
+        let tables = Tables::new();
+
+        let node_count = perft_search(&mut board, &tables, 4);
+        assert_eq!(node_count, 197281);
     }
 
     #[test]

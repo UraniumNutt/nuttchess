@@ -182,6 +182,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                 while attacks != 0 {
                     let end_square = pop_lsb(&mut attacks) as u64;
                     let attacked_type = board.get_piece_type(1 << end_square);
+                    let black_attack_mask = board.black_attack_mask(&tables);
                     let attack = MoveRep {
                         starting_square: 1 << start_square,
                         ending_square: 1 << end_square,
@@ -189,7 +190,9 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                         moved_type: PieceType::King,
                         attacked_type: attacked_type,
                     };
-                    moves.push(attack);
+                    if black_attack_mask & 1 << end_square == 0 {
+                        moves.push(attack);
+                    }
                 }
             }
         }
@@ -365,6 +368,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                 while attacks != 0 {
                     let end_square = pop_lsb(&mut attacks) as u64;
                     let attacked_type = board.get_piece_type(1 << end_square);
+                    let white_attack_mask = board.white_attack_mask(&tables);
                     let attack = MoveRep {
                         starting_square: 1 << start_square,
                         ending_square: 1 << end_square,
@@ -372,7 +376,9 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                         moved_type: PieceType::King,
                         attacked_type: attacked_type,
                     };
-                    moves.push(attack);
+                    if white_attack_mask & 1 << end_square == 0 {
+                        moves.push(attack);
+                    }
                 }
             }
         }
