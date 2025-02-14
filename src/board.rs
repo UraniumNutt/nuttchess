@@ -29,7 +29,7 @@ pub struct BoardState {
     pub move_stack_pointer: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MoveRep {
     pub starting_square: u64,
     pub ending_square: u64,
@@ -56,7 +56,7 @@ impl MoveRep {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Promotion {
     Queen,
     Bishop,
@@ -65,7 +65,7 @@ pub enum Promotion {
 }
 
 // Helps the move maker know what bitboard to manipulate
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -516,16 +516,16 @@ impl BoardState {
         if self.white_knights & mask != 0 || self.black_knights & mask != 0 {
             return Some(PieceType::Knight);
         }
-        if self.white_bishops & mask != 0 || self.white_bishops & mask != 0 {
+        if self.white_bishops & mask != 0 || self.black_bishops & mask != 0 {
             return Some(PieceType::Bishop);
         }
-        if self.white_rooks & mask != 0 || self.white_rooks & mask != 0 {
+        if self.white_rooks & mask != 0 || self.black_rooks & mask != 0 {
             return Some(PieceType::Rook);
         }
-        if self.white_queens & mask != 0 || self.white_queens & mask != 0 {
+        if self.white_queens & mask != 0 || self.black_queens & mask != 0 {
             return Some(PieceType::Queen);
         }
-        if self.white_king & mask != 0 || self.white_king & mask != 0 {
+        if self.white_king & mask != 0 || self.black_king & mask != 0 {
             return Some(PieceType::King);
         }
 

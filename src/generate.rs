@@ -12,153 +12,208 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
 
     // white to move
     if board.white_to_move {
-        // White pawn moves
-        if board.white_pawns != 0 {
-            white_pawn_pushes(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+        // if !board.white_in_check(&tables) {
+        if true {
+            // White pawn moves
+            if board.white_pawns != 0 {
+                white_pawn_pushes(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // White Knights
-        if board.white_knights != 0 {
-            white_knight_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // White Knights
+            if board.white_knights != 0 {
+                white_knight_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // White Rooks
-        if board.white_rooks != 0 {
-            white_rook_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // White Rooks
+            if board.white_rooks != 0 {
+                white_rook_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // White Bishops
-        if board.white_bishops != 0 {
-            white_bishop_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // White Bishops
+            if board.white_bishops != 0 {
+                white_bishop_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // White Queens
-        if board.white_queens != 0 {
-            white_queen_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // White Queens
+            if board.white_queens != 0 {
+                white_queen_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // White King
-        // Remove?
-        if board.white_king != 0 {
-            white_king_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
+            // White King
+            // Remove?
+            if board.white_king != 0 {
+                white_king_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
         }
+        // If the king is in check
+        // else {
+        //     // If the king is in check, there are three valid responses
+        //     // 1. Attack the attacking piece
+        //     // 2. Block the attacking piece(s)
+        //     // 3. Move the king to safety
+
+        //     // Try attacking the piece - this can only work if there is only one attacking piece
+
+        //     // }
+        // }
     }
     // Black to move
     else {
-        // Black pawn moves
-        if board.black_pawns != 0 {
-            black_pawn_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+        // if !board.black_in_check(&tables) {
+        if true {
+            // Black pawn moves
+            if board.black_pawns != 0 {
+                black_pawn_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // Black Knights
-        if board.black_knights != 0 {
-            black_knight_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // Black Knights
+            if board.black_knights != 0 {
+                black_knight_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // Black Rooks
-        if board.black_rooks != 0 {
-            black_rook_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // Black Rooks
+            if board.black_rooks != 0 {
+                black_rook_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // Black Bishops
-        if board.black_bishops != 0 {
-            black_bishop_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // Black Bishops
+            if board.black_bishops != 0 {
+                black_bishop_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // Black Queens
-        if board.black_queens != 0 {
-            black_queen_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
-        }
+            // Black Queens
+            if board.black_queens != 0 {
+                black_queen_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
 
-        // Black King
-        // Remove?
-        if board.black_king != 0 {
-            black_king_attacks(
-                board,
-                tables,
-                white_occupancy,
-                black_occupancy,
-                occupancy,
-                &mut moves,
-            );
+            // Black King
+            // Remove?
+            if board.black_king != 0 {
+                black_king_attacks(
+                    board,
+                    tables,
+                    white_occupancy,
+                    black_occupancy,
+                    occupancy,
+                    &mut moves,
+                );
+            }
         }
+        // If the king is in check
+        else {
+        }
+    }
+
+    moves
+}
+
+// Generate moves which attack the target
+fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) -> Vec<MoveRep> {
+    let mut moves = vec![];
+
+    // Get the type of piece of the target
+    let target_piece_type = board.get_piece_type(target);
+
+    // Get the mask of pieces which can attack the target
+    let mut possible_attacks = match board.white_to_move {
+        true => board.white_attacking(&tables, target),
+        false => board.black_attacking(&tables, target),
+    };
+
+    // If the possible attacks is empty, there are no capturing moves, so return early
+    if possible_attacks == 0 {
+        return moves;
+    }
+
+    // Generate the
+    while possible_attacks != 0 {
+        let start_square = pop_lsb(&mut possible_attacks);
+        let piece_type = board.get_piece_type(1 << start_square);
+        let mv = MoveRep {
+            starting_square: 1 << start_square,
+            ending_square: target,
+            promotion: None,
+            moved_type: piece_type.unwrap(),
+            attacked_type: target_piece_type,
+        };
+        moves.push(mv);
     }
 
     moves
@@ -650,5 +705,96 @@ mod tests {
         let least_sig = pop_lsb(&mut bb);
         assert_eq!(least_sig, 0);
         assert_eq!(bb, 2);
+    }
+
+    #[test]
+    fn test_gen_attacking_moves_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/1P6/8/5B2/3P4/P1P1PPPP/RN1QKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::C7;
+
+        let expected_move_1 = MoveRep {
+            starting_square: 1 << Tables::F4,
+            ending_square: 1 << Tables::C7,
+            promotion: None,
+            moved_type: PieceType::Bishop,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        let expected_move_2 = MoveRep {
+            starting_square: 1 << Tables::B6,
+            ending_square: 1 << Tables::C7,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Pawn),
+        };
+
+        let results = generate_attacking_moves(&board, &tables, target);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+    }
+
+    #[test]
+    fn test_gen_attacking_moves_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let results = generate_attacking_moves(&board, &tables, 1 << Tables::E8);
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_gen_attacking_moves_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/8/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::D8;
+
+        let expected_move = MoveRep {
+            starting_square: 1 << Tables::D1,
+            ending_square: 1 << Tables::D8,
+            promotion: None,
+            moved_type: PieceType::Queen,
+            attacked_type: Some(PieceType::Queen),
+        };
+
+        let results = generate_attacking_moves(&board, &tables, target);
+        assert_eq!(results.len(), 1);
+        assert!(results.contains(&expected_move));
+    }
+
+    #[test]
+    fn test_gen_attacking_moves_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pp2pppp/8/2p5/3Q4/8/PPP1PPPP/RNB1KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::D4;
+
+        let expected_move_1 = MoveRep {
+            starting_square: 1 << Tables::D8,
+            ending_square: 1 << Tables::D4,
+            promotion: None,
+            moved_type: PieceType::Queen,
+            attacked_type: Some(PieceType::Queen),
+        };
+
+        let expected_move_2 = MoveRep {
+            starting_square: 1 << Tables::C5,
+            ending_square: 1 << Tables::D4,
+            promotion: None,
+            moved_type: PieceType::Pawn,
+            attacked_type: Some(PieceType::Queen),
+        };
+
+        let results = generate_attacking_moves(&board, &tables, target);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
     }
 }
