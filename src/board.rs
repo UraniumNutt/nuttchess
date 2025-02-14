@@ -674,6 +674,60 @@ impl BoardState {
         attack_mask
     }
 
+    // Gets the mask of the white pieces that attack the given piece mask
+    pub fn white_attacking(&self, tables: &Tables, piece_mask: u64) -> u64 {
+        // attacking mask
+        let mut attacking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = piece_mask.trailing_zeros() as usize;
+
+        // Check attacking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        attacking_mask |= tables.black_pawn_attacks[piece_index] & self.white_pawns;
+        // Check attacking knights
+        attacking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
+        // Check attacking rooks
+        attacking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_rooks;
+        // Check attacking bishops
+        attacking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_bishops;
+        // Check attacking queens
+        attacking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_queens;
+        attacking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_queens;
+        // Check attacking kings
+        attacking_mask |= tables.king_attacks[piece_index] & self.white_king;
+
+        attacking_mask
+    }
+
+    // Gets the mask of the black pieces that attack the given piece mask
+    pub fn black_attacking(&self, tables: &Tables, piece_mask: u64) -> u64 {
+        // attacking mask
+        let mut attacking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = piece_mask.trailing_zeros() as usize;
+
+        // Check attacking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        attacking_mask |= tables.white_pawn_attacks[piece_index] & self.black_pawns;
+        // Check attacking knights
+        attacking_mask |= tables.knight_attacks[piece_index] & self.black_knights;
+        // Check attacking rooks
+        attacking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_rooks;
+        // Check attacking bishops
+        attacking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_bishops;
+        // Check attacking queens
+        attacking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_queens;
+        attacking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_queens;
+        // Check attacking kings
+        attacking_mask |= tables.king_attacks[piece_index] & self.black_king;
+
+        attacking_mask
+    }
+
     // Get if the white king is in check
     pub fn white_in_check(&self, table: &Tables) -> bool {
         let black_attack_mask = self.black_attack_mask(table);
@@ -1644,6 +1698,118 @@ mod tests {
         let tables = Tables::new();
         let expected = false;
         let result = board.black_in_check(&tables);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attacking_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppp1ppp/8/4Q3/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected = 1 << Tables::E5;
+        let result = board.white_attacking(&tables, 1 << Tables::E8);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attacking_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+        let expected = 0;
+        let result = board.white_attacking(&tables, 1 << Tables::E8);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attacking_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+        let expected = 0x78;
+        let result = board.white_attacking(&tables, 1 << Tables::D2);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attacking_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/3N4/8/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::D6;
+        let result = board.white_attacking(&tables, 1 << Tables::C8);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn white_attacking_5() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/3P4/8/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::D6;
+        let result = board.white_attacking(&tables, 1 << Tables::E7);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attacking_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/8/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::D8;
+        let result = board.black_attacking(&tables, 1 << Tables::D1);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attacking_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppp1ppp/8/8/8/4p3/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::E3;
+        let result = board.black_attacking(&tables, 1 << Tables::F2);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attacking_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqk1nr/pppppppp/8/8/1b6/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::B4;
+        let result = board.black_attacking(&tables, 1 << Tables::E1);
+    }
+
+    #[test]
+    fn black_attacking_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::A8;
+        let result = board.black_attacking(&tables, 1 << Tables::A2);
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn black_attacking_5() {
+        let board = BoardState::state_from_string_fen(
+            "r1bqkbnr/pppppppp/8/8/8/6n1/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let expected = 1 << Tables::G3;
+        let result = board.black_attacking(&tables, 1 << Tables::H1);
         assert_eq!(expected, result);
     }
 }
