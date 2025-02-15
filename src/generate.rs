@@ -332,6 +332,42 @@ fn generate_blocking_moves(
     moves
 }
 
+// Generate moves which move the king to safety
+fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
+    let mut moves = vec![];
+
+    // Get the king position
+    let king = match board.white_to_move {
+        true => board.white_king,
+        false => board.black_king,
+    };
+    let king_index = king.trailing_zeros();
+    let mut safe_squares = match board.white_to_move {
+        true => {
+            tables.king_attacks[king_index as usize]
+                & !board.black_attack_mask(tables)
+                & !board.white_occupancy()
+        }
+        false => {
+            tables.king_attacks[king_index as usize]
+                & !board.white_attack_mask(tables)
+                & !board.black_occupancy()
+        }
+    };
+    while safe_squares != 0 {
+        let end_square = pop_lsb(&mut safe_squares);
+        let attacked_type = board.get_piece_type(1 << end_square);
+        let mv = MoveRep::new(king, 1 << end_square, None, PieceType::King, attacked_type);
+        // TODO this is an inefficent way of doing this. we need to come up with a diffrent approach
+        let mut local_copy = board.clone();
+        if local_copy.move_safe_for_king(tables, &mv) {
+            moves.push(mv);
+        }
+    }
+
+    moves
+}
+
 #[inline]
 fn white_pawn_moves(
     board: &BoardState,
@@ -387,18 +423,6 @@ fn white_pawn_moves(
             }
         }
     }
-}
-
-#[inline]
-fn white_pawn_attacks(
-    board: &BoardState,
-    tables: &Tables,
-    white_occupancy: u64,
-    black_occupancy: u64,
-    occupancy: u64,
-    moves: &mut Vec<MoveRep>,
-) {
-    todo!();
 }
 
 #[inline]
@@ -1055,5 +1079,151 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert!(results.contains(&expected_move_1));
         assert!(results.contains(&expected_move_2));
+    }
+
+    #[test]
+    fn king_escape_1() {
+        let board = BoardState::state_from_string_fen(
+            "rnbq1bnr/pppp1ppp/8/4k2R/8/8/PPPPPPP1/RNBQKBN1 b Q - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move_1 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::F6,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_2 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::E6,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_3 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::D6,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_4 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::D4,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_5 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::E4,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_6 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::F4,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        let results = move_king_to_safety(&board, &tables);
+        assert_eq!(results.len(), 6);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+        assert!(results.contains(&expected_move_3));
+        assert!(results.contains(&expected_move_4));
+        assert!(results.contains(&expected_move_5));
+        assert!(results.contains(&expected_move_6));
+    }
+
+    #[test]
+    fn king_escape_2() {
+        let board = BoardState::state_from_string_fen("8/8/8/8/4k3/2KP4/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+
+        let expected_move_1 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::E3,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_2 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::F3,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_3 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::F4,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_4 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::F5,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_5 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::E5,
+            None,
+            PieceType::King,
+            None,
+        );
+        let expected_move_6 = MoveRep::new(
+            1 << Tables::E4,
+            1 << Tables::D5,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        let results = move_king_to_safety(&board, &tables);
+        assert_eq!(results.len(), 6);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+        assert!(results.contains(&expected_move_3));
+        assert!(results.contains(&expected_move_4));
+        assert!(results.contains(&expected_move_5));
+        assert!(results.contains(&expected_move_6));
+    }
+
+    #[test]
+    fn king_escape_3() {
+        let board =
+            BoardState::state_from_string_fen("3Q1k2/4Q3/8/8/8/2K5/8/8 b - - 0 1".to_string());
+        let tables = Tables::new();
+        let results = move_king_to_safety(&board, &tables);
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn king_escape_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/ppppqppp/8/8/8/8/PPP2PPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::D2,
+            None,
+            PieceType::King,
+            None,
+        );
+        let results = move_king_to_safety(&board, &tables);
+        assert_eq!(results.len(), 1);
+        assert!(results.contains(&expected_move));
     }
 }
