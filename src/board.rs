@@ -325,7 +325,7 @@ impl BoardState {
     }
 
     pub fn state_from_string_fen(fen_string: String) -> BoardState {
-        let mut tokens = fen_string.split(" ");
+        let tokens = fen_string.split(" ");
         BoardState::state_from_fen(tokens).unwrap()
     }
 
@@ -738,6 +738,17 @@ impl BoardState {
     pub fn black_in_check(&self, table: &Tables) -> bool {
         let white_attack_mask = self.white_attack_mask(table);
         white_attack_mask & self.black_king != 0
+    }
+
+    // Checks that the move will not result in check
+    pub fn move_safe_for_king(&mut self, table: &Tables, play: &MoveRep) -> bool {
+        self.make(&play);
+        let is_safe = !match self.white_to_move {
+            true => self.black_in_check(&table),
+            false => self.white_in_check(&table),
+        };
+        self.unmake(&play);
+        is_safe
     }
 }
 
@@ -1811,5 +1822,73 @@ mod tests {
         let expected = 1 << Tables::G3;
         let result = board.black_attacking(&tables, 1 << Tables::H1);
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E2,
+            1 << Tables::E4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "rn1qkbnr/p1pppppp/b7/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::E2,
+            None,
+            PieceType::King,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(false, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_3() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppp1ppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::E7,
+            None,
+            PieceType::King,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/Q7/8/PP1PPPPP/RNB1KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::D7,
+            1 << Tables::D6,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(false, result);
     }
 }

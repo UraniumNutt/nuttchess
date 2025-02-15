@@ -89,14 +89,13 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
         }
         // If the king is in check
         // else {
-        //     // If the king is in check, there are three valid responses
-        //     // 1. Attack the attacking piece
-        //     // 2. Block the attacking piece(s)
-        //     // 3. Move the king to safety
+        // If the king is in check, there are three valid responses
+        // 1. Attack the attacking piece
+        // 2. Block the attacking piece(s)
+        // 3. Move the king to safety
 
-        //     // Try attacking the piece - this can only work if there is only one attacking piece
+        // Try attacking the piece - this can only work if there is only one attacking piece
 
-        //     // }
         // }
     }
     // Black to move
@@ -202,7 +201,7 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
         return moves;
     }
 
-    // Generate the
+    // Generate the moves
     while possible_attacks != 0 {
         let start_square = pop_lsb(&mut possible_attacks);
         let piece_type = board.get_piece_type(1 << start_square);
@@ -213,7 +212,72 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
             moved_type: piece_type.unwrap(),
             attacked_type: target_piece_type,
         };
-        moves.push(mv);
+        // moves.push(mv);
+        let mut foo = board.clone();
+        if foo.move_safe_for_king(&tables, &mv) {
+            moves.push(mv);
+        }
+    }
+
+    moves
+}
+
+// Generate blocking moves
+fn generate_blocking_moves(
+    board: &BoardState,
+    tables: &Tables,
+    protect_target: u64,
+    attacking_target: u64,
+) -> Vec<MoveRep> {
+    let mut moves = vec![];
+
+    // Get the mask of the moves which can be blocked
+    let attacking_target_index = attacking_target.trailing_zeros() as u64;
+    let protect_target_index = protect_target.trailing_zeros() as u64;
+    let piece_type = board.get_piece_type(attacking_target);
+    let mut blockable_attack_mask = match piece_type {
+        Some(PieceType::Rook) => {
+            // The intersection between the attackers mask, and the attack mask as if the attacking piece was on the protected
+            // square is the blockable attack mask
+            let attackers_mask =
+                tables.get_rook_attack(attacking_target_index as usize, board.occupancy());
+            let protected_mask =
+                tables.get_rook_attack(protect_target_index as usize, board.occupancy());
+            attackers_mask & protected_mask
+        }
+        Some(PieceType::Bishop) => {
+            let attackers_mask =
+                tables.get_bishop_attack(attacking_target_index as usize, board.occupancy());
+            let protected_mask =
+                tables.get_bishop_attack(protect_target_index as usize, board.occupancy());
+            attackers_mask & protected_mask
+        }
+        Some(PieceType::Queen) => {
+            let attackers_mask_rook =
+                tables.get_rook_attack(attacking_target_index as usize, board.occupancy());
+            let protected_mask_rook =
+                tables.get_rook_attack(protect_target_index as usize, board.occupancy());
+            let attackers_mask_bishop =
+                tables.get_bishop_attack(attacking_target_index as usize, board.occupancy());
+            let protected_mask_bishop =
+                tables.get_bishop_attack(protect_target_index as usize, board.occupancy());
+            attackers_mask_rook
+                & protected_mask_rook
+                & attackers_mask_bishop
+                & protected_mask_bishop
+        }
+        _ => 0,
+    };
+
+    // If the mask is empty, then there are no moves to block
+    if blockable_attack_mask == 0 {
+        return moves;
+    }
+
+    // Now that we have a mask of the squares that can block the attack, find the moves that attack those squares
+    while blockable_attack_mask != 0 {
+        let square = pop_lsb(&mut blockable_attack_mask);
+        moves.append(generate_attacking_moves(&board, &tables, 1 << square).as_mut());
     }
 
     moves
@@ -797,4 +861,32 @@ mod tests {
         assert!(results.contains(&expected_move_1));
         assert!(results.contains(&expected_move_2));
     }
+
+    #[test]
+    // fn test_gen_blocking_moves_1() {
+    //     let board = BoardState::state_from_string_fen(
+    //         "rn1qkbnr/pppppppp/8/5b2/8/2NK4/P1PP1PPP/R1BQ1BNR w kq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+
+    //     let expected_move = MoveRep {
+    //         starting_square: 1 << Tables::C3,
+    //         ending_square: 1 << Tables::E4,
+    //         promotion: None,
+    //         moved_type: PieceType::Knight,
+    //         attacked_type: None,
+    //     };
+
+    //     let results = generate_blocking_moves(&board, &tables, 1 << Tables::D3, 1 << Tables::F5);
+    //     assert_eq!(results.len(), 1);
+    //     assert!(results.contains(&expected_move));
+    // }
+    #[test]
+    fn test_gen_blocking_moves_2() {}
+
+    #[test]
+    fn test_gen_blocking_moves_3() {}
+
+    #[test]
+    fn test_gen_blocking_moves_4() {}
 }
