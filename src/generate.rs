@@ -16,7 +16,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
         if true {
             // White pawn moves
             if board.white_pawns != 0 {
-                white_pawn_pushes(
+                white_pawn_moves(
                     board,
                     tables,
                     white_occupancy,
@@ -104,7 +104,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
         if true {
             // Black pawn moves
             if board.black_pawns != 0 {
-                black_pawn_attacks(
+                black_pawn_moves(
                     board,
                     tables,
                     white_occupancy,
@@ -213,8 +213,57 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
             attacked_type: target_piece_type,
         };
         // moves.push(mv);
-        let mut foo = board.clone();
-        if foo.move_safe_for_king(&tables, &mv) {
+        // TODO Figure out a better way to do this. Why does this not work in the function?
+        let mut mutable_copy = board.clone();
+        if mutable_copy.move_safe_for_king(&tables, &mv) {
+            moves.push(mv);
+        }
+    }
+
+    moves
+}
+
+// Generates moves that block (do not capture) the target. Similar to generate_attacking_moves, but with pawn pushes instead of attacks
+fn generate_target_blocking(
+    board: &BoardState,
+    tables: &Tables,
+    target: u64,
+    protect_target: u64,
+) -> Vec<MoveRep> {
+    let mut moves = vec![];
+
+    // Get the type of piece of the target
+    let target_piece_type = board.get_piece_type(target);
+
+    // Get the mask of pieces which can attack the target
+    let mut possible_attacks = match board.white_to_move {
+        true => board.white_blocking(&tables, target),
+        false => board.black_blocking(&tables, target),
+    };
+
+    // Remove any attacks which use the protect piece, it cant protect itself
+    possible_attacks &= !protect_target;
+
+    // If the possible attacks is empty, there are no capturing moves, so return early
+    if possible_attacks == 0 {
+        return moves;
+    }
+
+    // Generate the moves
+    while possible_attacks != 0 {
+        let start_square = pop_lsb(&mut possible_attacks);
+        let piece_type = board.get_piece_type(1 << start_square);
+        let mv = MoveRep {
+            starting_square: 1 << start_square,
+            ending_square: target,
+            promotion: None,
+            moved_type: piece_type.unwrap(),
+            attacked_type: target_piece_type,
+        };
+        // moves.push(mv);
+        // TODO Figure out a better way to do this. Why does this not work in the function?
+        let mut mutable_copy = board.clone();
+        if mutable_copy.move_safe_for_king(&tables, &mv) {
             moves.push(mv);
         }
     }
@@ -261,10 +310,8 @@ fn generate_blocking_moves(
                 tables.get_bishop_attack(attacking_target_index as usize, board.occupancy());
             let protected_mask_bishop =
                 tables.get_bishop_attack(protect_target_index as usize, board.occupancy());
-            attackers_mask_rook
-                & protected_mask_rook
-                & attackers_mask_bishop
-                & protected_mask_bishop
+            attackers_mask_rook & protected_mask_rook
+                | attackers_mask_bishop & protected_mask_bishop
         }
         _ => 0,
     };
@@ -277,14 +324,16 @@ fn generate_blocking_moves(
     // Now that we have a mask of the squares that can block the attack, find the moves that attack those squares
     while blockable_attack_mask != 0 {
         let square = pop_lsb(&mut blockable_attack_mask);
-        moves.append(generate_attacking_moves(&board, &tables, 1 << square).as_mut());
+        moves.append(
+            generate_target_blocking(&board, &tables, 1 << square, protect_target).as_mut(),
+        );
     }
 
     moves
 }
 
 #[inline]
-fn white_pawn_pushes(
+fn white_pawn_moves(
     board: &BoardState,
     tables: &Tables,
     white_occupancy: u64,
@@ -518,7 +567,7 @@ fn white_king_attacks(
 }
 
 #[inline]
-fn black_pawn_attacks(
+fn black_pawn_moves(
     board: &BoardState,
     tables: &Tables,
     white_occupancy: u64,
@@ -754,6 +803,8 @@ pub fn lsb(bb: u64) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use std::hint::assert_unchecked;
+
     use super::*;
 
     #[test]
@@ -863,30 +914,146 @@ mod tests {
     }
 
     #[test]
-    // fn test_gen_blocking_moves_1() {
-    //     let board = BoardState::state_from_string_fen(
-    //         "rn1qkbnr/pppppppp/8/5b2/8/2NK4/P1PP1PPP/R1BQ1BNR w kq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
+    fn test_gen_blocking_moves_1() {
+        let board = BoardState::state_from_string_fen(
+            "rn1qkbnr/pppppppp/8/5b2/8/2NK4/P1PP1PPP/R1BQ1BNR w kq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
 
-    //     let expected_move = MoveRep {
-    //         starting_square: 1 << Tables::C3,
-    //         ending_square: 1 << Tables::E4,
-    //         promotion: None,
-    //         moved_type: PieceType::Knight,
-    //         attacked_type: None,
-    //     };
+        let expected_move = MoveRep {
+            starting_square: 1 << Tables::C3,
+            ending_square: 1 << Tables::E4,
+            promotion: None,
+            moved_type: PieceType::Knight,
+            attacked_type: None,
+        };
 
-    //     let results = generate_blocking_moves(&board, &tables, 1 << Tables::D3, 1 << Tables::F5);
-    //     assert_eq!(results.len(), 1);
-    //     assert!(results.contains(&expected_move));
-    // }
-    #[test]
-    fn test_gen_blocking_moves_2() {}
+        let results = generate_blocking_moves(&board, &tables, 1 << Tables::D3, 1 << Tables::F5);
+        assert_eq!(results.len(), 1);
+        assert!(results.contains(&expected_move));
+    }
 
     #[test]
-    fn test_gen_blocking_moves_3() {}
+    fn test_gen_blocking_moves_2() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/p1pppppp/1p6/8/8/6P1/PPPPPPBP/RNBQK1NR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move_1 = MoveRep::new(
+            1 << Tables::C7,
+            1 << Tables::C6,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let expected_move_2 = MoveRep::new(
+            1 << Tables::D7,
+            1 << Tables::D5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let expected_move_3 = MoveRep::new(
+            1 << Tables::B8,
+            1 << Tables::C6,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let expected_move_4 = MoveRep::new(
+            1 << Tables::C8,
+            1 << Tables::B7,
+            None,
+            PieceType::Bishop,
+            None,
+        );
+
+        let results = generate_blocking_moves(&board, &tables, 1 << Tables::A8, 1 << Tables::G2);
+        assert_eq!(results.len(), 4);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+        assert!(results.contains(&expected_move_3));
+        assert!(results.contains(&expected_move_4));
+    }
 
     #[test]
-    fn test_gen_blocking_moves_4() {}
+    fn test_gen_blocking_moves_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppp1ppp/4p3/8/8/BP2P3/P1PP1PPP/RN1QKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move_1 = MoveRep::new(
+            1 << Tables::G8,
+            1 << Tables::E7,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let expected_move_2 = MoveRep::new(
+            1 << Tables::D8,
+            1 << Tables::E7,
+            None,
+            PieceType::Queen,
+            None,
+        );
+
+        let expected_move_3 = MoveRep::new(
+            1 << Tables::D7,
+            1 << Tables::D6,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let expected_move_4 = MoveRep::new(
+            1 << Tables::C7,
+            1 << Tables::C5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let results = generate_blocking_moves(&board, &tables, 1 << Tables::F8, 1 << Tables::A3);
+        assert_eq!(results.len(), 4);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+        assert!(results.contains(&expected_move_3));
+        assert!(results.contains(&expected_move_4));
+    }
+
+    #[test]
+    fn test_gen_blocking_moves_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/8/8/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_move_1 = MoveRep::new(
+            1 << Tables::C8,
+            1 << Tables::D7,
+            None,
+            PieceType::Bishop,
+            None,
+        );
+
+        let expected_move_2 = MoveRep::new(
+            1 << Tables::B8,
+            1 << Tables::D7,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let results = generate_blocking_moves(&board, &tables, 1 << Tables::D8, 1 << Tables::D1);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&expected_move_1));
+        assert!(results.contains(&expected_move_2));
+    }
 }

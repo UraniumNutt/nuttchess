@@ -675,11 +675,11 @@ impl BoardState {
     }
 
     // Gets the mask of the white pieces that attack the given piece mask
-    pub fn white_attacking(&self, tables: &Tables, piece_mask: u64) -> u64 {
+    pub fn white_attacking(&self, tables: &Tables, target: u64) -> u64 {
         // attacking mask
         let mut attacking_mask = 0;
         // turn the piece mask into an index
-        let piece_index = piece_mask.trailing_zeros() as usize;
+        let piece_index = target.trailing_zeros() as usize;
 
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
@@ -699,6 +699,40 @@ impl BoardState {
         attacking_mask |= tables.king_attacks[piece_index] & self.white_king;
 
         attacking_mask
+    }
+
+    // Get the mask of the white pices that 'block' the target. Similar to white_attacking, but with pawn pushes instead of attacks.
+    pub fn white_blocking(&self, tables: &Tables, target: u64) -> u64 {
+        // blocking mask
+        let mut blocking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = target.trailing_zeros() as usize;
+
+        // Check blocking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        // Single push
+        if target >> 8 & self.white_pawns != 0 {
+            blocking_mask |= target >> 8 & self.white_pawns;
+        }
+        // Double push
+        if target >> 16 & self.white_pawns != 0 && target >> 8 & self.occupancy() == 0 {
+            blocking_mask |= target >> 16 & self.white_pawns;
+        }
+        // blocking_mask |= tables.black_pawn_push[piece_index] & self.white_pawns;
+        // Check blocking knights
+        blocking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
+        // Check blocking rooks
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_rooks;
+        // Check blocking bishops
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_bishops;
+        // Check blocking queens
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_queens;
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_queens;
+        // NOTE No blocking kings because that should never happen
+
+        blocking_mask
     }
 
     // Gets the mask of the black pieces that attack the given piece mask
@@ -726,6 +760,40 @@ impl BoardState {
         attacking_mask |= tables.king_attacks[piece_index] & self.black_king;
 
         attacking_mask
+    }
+
+    // Get the mask of the black pices that 'block' the target. Similar to black_attacking, but with pawn pushes instead of attacks.
+    pub fn black_blocking(&self, tables: &Tables, target: u64) -> u64 {
+        // blocking mask
+        let mut blocking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = target.trailing_zeros() as usize;
+
+        // Check blocking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        // blocking_mask |= tables.white_pawn_push[piece_index] & self.black_pawns;
+        // Single push
+        if target << 8 & self.black_pawns != 0 {
+            blocking_mask |= target << 8 & self.black_pawns;
+        }
+        // Double push
+        if target << 16 & self.black_pawns != 0 && target << 8 & self.occupancy() == 0 {
+            blocking_mask |= target << 16 & self.black_pawns;
+        }
+        // Check blocking knights
+        blocking_mask |= tables.knight_attacks[piece_index] & self.black_knights;
+        // Check blocking rooks
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_rooks;
+        // Check blocking bishops
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_bishops;
+        // Check blocking queens
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_queens;
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_queens;
+        // NOTE No blocking kings because that should never happen
+
+        blocking_mask
     }
 
     // Get if the white king is in check
