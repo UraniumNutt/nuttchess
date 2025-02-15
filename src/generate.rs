@@ -12,8 +12,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
 
     // white to move
     if board.white_to_move {
-        // if !board.white_in_check(&tables) {
-        if true {
+        if !board.white_in_check(&tables) {
+            // if true {
             // White pawn moves
             if board.white_pawns != 0 {
                 white_pawn_moves(
@@ -88,20 +88,35 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
             }
         }
         // If the king is in check
-        // else {
-        // If the king is in check, there are three valid responses
-        // 1. Attack the attacking piece
-        // 2. Block the attacking piece(s)
-        // 3. Move the king to safety
+        else {
+            // If the king is in check, there are three valid responses
+            // 1. Attack the attacking piece
+            // 2. Block the attacking piece(s)
+            // 3. Move the king to safety
 
-        // Try attacking the piece - this can only work if there is only one attacking piece
-
-        // }
+            // Try attacking and blocking the piece - this can only work if there is only one attacking piece
+            if board
+                .black_attacking(&tables, board.white_king)
+                .count_ones()
+                == 1
+            {
+                let target = board.black_attacking(&tables, board.white_king);
+                moves.append(&mut generate_attacking_moves(&board, tables, target as u64));
+                moves.append(&mut generate_blocking_moves(
+                    board,
+                    tables,
+                    board.white_king,
+                    target as u64,
+                ))
+            }
+            // Now try moving the king to safety
+            moves.append(&mut move_king_to_safety(board, tables));
+        }
     }
     // Black to move
     else {
-        // if !board.black_in_check(&tables) {
-        if true {
+        if !board.black_in_check(&tables) {
+            // if true {
             // Black pawn moves
             if board.black_pawns != 0 {
                 black_pawn_moves(
@@ -177,6 +192,28 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
         }
         // If the king is in check
         else {
+            // If the king is in check, there are three valid responses
+            // 1. Attack the attacking piece
+            // 2. Block the attacking piece(s)
+            // 3. Move the king to safety
+
+            // Try attacking and blocking the piece - this can only work if there is only one attacking piece
+            if board
+                .white_attacking(&tables, board.black_king)
+                .count_ones()
+                == 1
+            {
+                let target = board.white_attacking(tables, board.black_king);
+                moves.append(&mut generate_attacking_moves(&board, tables, target as u64));
+                moves.append(&mut generate_blocking_moves(
+                    board,
+                    tables,
+                    board.black_king,
+                    target as u64,
+                ))
+            }
+            // Now try moving the king to safety
+            moves.append(&mut move_king_to_safety(board, tables));
         }
     }
 
