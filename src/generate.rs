@@ -107,7 +107,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     tables,
                     board.white_king,
                     target as u64,
-                ))
+                ));
             }
             // Now try moving the king to safety
             moves.append(&mut move_king_to_safety(board, tables));
@@ -210,7 +210,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     tables,
                     board.black_king,
                     target as u64,
-                ))
+                ));
             }
             // Now try moving the king to safety
             moves.append(&mut move_king_to_safety(board, tables));
@@ -444,17 +444,38 @@ fn white_pawn_moves(
     pawn_bb = board.white_pawns;
     while pawn_bb != 0 {
         let start_square = pop_lsb(&mut pawn_bb);
-        let mut attacks = tables.white_pawn_attacks[start_square];
+        let mut attacks = tables.white_pawn_attacks[start_square] & black_occupancy;
         while attacks != 0 {
             let end_square = 1 << pop_lsb(&mut attacks);
             let attacked_type = board.get_piece_type(end_square);
-            if (end_square & black_occupancy) != 0 {
+            let attack = MoveRep::new(
+                1 << start_square,
+                end_square,
+                None,
+                PieceType::Pawn,
+                attacked_type,
+            );
+            moves.push(attack);
+        }
+    }
+    // White Pawn En Passant Attacks
+    // Get relevent white pawns (look 'backward' so use opposite color in attack lookup)
+    if board.en_passant_target != 0 {
+        pawn_bb = board.white_pawns
+            & tables.black_pawn_attacks[board.en_passant_target.trailing_zeros() as usize];
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            let mut attacks = tables.white_pawn_attacks[start_square] & board.en_passant_target;
+            while attacks != 0 {
+                let end_square = 1 << pop_lsb(&mut attacks);
+                // We know its a pawn
+                let attacked_type = PieceType::Pawn;
                 let attack = MoveRep::new(
                     1 << start_square,
                     end_square,
                     None,
-                    PieceType::Pawn,
                     attacked_type,
+                    Some(PieceType::Pawn),
                 );
                 moves.push(attack);
             }
@@ -666,17 +687,39 @@ fn black_pawn_moves(
     pawn_bb = board.black_pawns;
     while pawn_bb != 0 {
         let start_square = pop_lsb(&mut pawn_bb);
-        let mut attacks = tables.black_pawn_attacks[start_square];
+        let mut attacks = tables.black_pawn_attacks[start_square] & white_occupancy;
         while attacks != 0 {
             let end_square = 1 << pop_lsb(&mut attacks);
             let attacked_type = board.get_piece_type(end_square);
-            if (end_square & white_occupancy) != 0 {
+            let attack = MoveRep::new(
+                1 << start_square,
+                end_square,
+                None,
+                PieceType::Pawn,
+                attacked_type,
+            );
+            moves.push(attack);
+        }
+    }
+
+    // Black Pawn En Passant Attacks
+    // Get relevent black pawns (look 'backward' so use opposite color in attack lookup)
+    if board.en_passant_target != 0 {
+        pawn_bb = board.black_pawns
+            & tables.white_pawn_attacks[board.en_passant_target.trailing_zeros() as usize];
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            let mut attacks = tables.black_pawn_attacks[start_square] & board.en_passant_target;
+            while attacks != 0 {
+                let end_square = 1 << pop_lsb(&mut attacks);
+                // We know its a pawn
+                let attacked_type = PieceType::Pawn;
                 let attack = MoveRep::new(
                     1 << start_square,
                     end_square,
                     None,
-                    PieceType::Pawn,
                     attacked_type,
+                    Some(PieceType::Pawn),
                 );
                 moves.push(attack);
             }
@@ -1263,4 +1306,34 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results.contains(&expected_move));
     }
+
+    // TODO So we probably need to change the relevent masks to include the edges of the board to make the test pass
+    // Howerver, if we change the masks, we will need to generate a new set of magics
+    // #[test]
+    // fn test_sample_bishop_move() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "rnbqkbnr/1ppppp1p/8/p5p1/8/1P6/PBPPPPPP/RN1QKBNR w KQkq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+
+    //     let expected_move = MoveRep::new(
+    //         1 << Tables::B2,
+    //         1 << Tables::H8,
+    //         None,
+    //         PieceType::Bishop,
+    //         Some(PieceType::Rook),
+    //     );
+
+    //     // let results = generate(&board, &tables);
+    //     // assert!(results.contains(&expected_move));
+    //     // let mut attacks = tables.get_bishop_attack(Tables::B2 as usize, board.occupancy())
+    //     //     & !board.white_occupancy();
+    //     // print_bitboard(attacks);
+
+    //     let mut foo = [0; 64];
+    //     Tables::generate_bishop_occupancy_mask(&mut foo);
+    //     print_bitboard(foo[14]);
+
+    //     panic!();
+    // }
 }

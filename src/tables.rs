@@ -561,7 +561,7 @@ impl Tables {
     }
 
     // Get the occupancy mask for the bishops
-    fn generate_bishop_occupancy_mask(table: &mut [u64; 64]) {
+    pub fn generate_bishop_occupancy_mask(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
             let rank = shift_value / 8;
             let file = shift_value % 8;
@@ -823,7 +823,7 @@ impl Tables {
 
 #[cfg(test)]
 mod tests {
-    use crate::print_bitboard;
+    use crate::{generate::generate, print_bitboard};
 
     use super::*;
 
@@ -895,5 +895,13 @@ mod tests {
         println!("Actual: {}", result3);
         print_bitboard(result3);
         assert_eq!(result3, expected3);
+    }
+
+    #[test]
+    fn test_calculate_relevent_bishop_occupancy_4() {
+        let test = 0x100000000000000;
+        let expected = 0x102040810a000a0;
+        let result = Tables::calculate_relevent_bishops_occupancy(14, test);
+        assert_eq!(result, expected);
     }
 }

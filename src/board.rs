@@ -24,7 +24,7 @@ pub struct BoardState {
     pub white_to_move: bool,
     pub en_passant_target: u64,
     pub reversable_move_counter: u8,
-    pub fullmove_counter: u16,
+    pub full_move_counter: u16,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
@@ -125,7 +125,7 @@ impl BoardState {
             white_to_move: true,
             en_passant_target: 0x0,
             reversable_move_counter: 0,
-            fullmove_counter: 0,
+            full_move_counter: 1,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         }
@@ -154,7 +154,7 @@ impl BoardState {
             white_to_move: true,
             en_passant_target: 0,
             reversable_move_counter: 0,
-            fullmove_counter: 0,
+            full_move_counter: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         }
@@ -313,7 +313,7 @@ impl BoardState {
         // Parse the fullmove counter
         if let Some(full_move_clock) = fen_tokens.next() {
             if let Ok(full_move_clock_int) = full_move_clock.parse::<u16>() {
-                state.fullmove_counter = full_move_clock_int;
+                state.full_move_counter = full_move_clock_int;
             } else {
                 return Err("Error parsing the number of fullmoves".to_string());
             }
@@ -353,14 +353,83 @@ impl BoardState {
         self.make(&move_rep);
     }
 
+    /// Pushes the current nonreversible state to the stack
+    fn push_state(&mut self) {
+        let mut frame = MoveStackFrame::new();
+        frame.en_passant_target = self.en_passant_target;
+        frame.reversable_move_counter = self.reversable_move_counter;
+        frame.fullmove_counter = self.full_move_counter;
+        frame.white_queenside_castle_rights = self.white_queenside_castle_rights;
+        frame.white_kingside_castle_rights = self.white_kingside_castle_rights;
+        frame.black_queenside_castle_rights = self.black_queenside_castle_rights;
+        frame.black_kingside_castle_rights = self.black_kingside_castle_rights;
+        self.move_stack.push(frame);
+        self.move_stack_pointer += 1;
+    }
+
+    /// Pops the nonreversible state from the stack
+    fn pop_state(&mut self) {
+        self.move_stack_pointer -= 1;
+        let frame = self.move_stack.pop().unwrap();
+        self.en_passant_target = frame.en_passant_target;
+        self.reversable_move_counter = frame.reversable_move_counter;
+        self.full_move_counter = frame.fullmove_counter;
+        self.white_queenside_castle_rights = frame.white_queenside_castle_rights;
+        self.white_kingside_castle_rights = frame.white_kingside_castle_rights;
+        self.black_queenside_castle_rights = frame.black_queenside_castle_rights;
+        self.black_kingside_castle_rights = frame.black_kingside_castle_rights;
+    }
+
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
         self.clear(play.starting_square, Some(play.moved_type));
-        self.clear_all(play.ending_square);
-        // self.clear_all(play.ending_square);
+        if play.ending_square == self.en_passant_target {
+            // Special en passant attack logic
+            match self.white_to_move {
+                true => self.clear_all(play.ending_square << 8),
+                false => self.clear_all(play.ending_square >> 8),
+            }
+        } else {
+            // Normal attack clear
+            self.clear_all(play.ending_square);
+        }
         self.set(play.ending_square, Some(play.moved_type));
         // Do special logic here
+        self.push_state();
+        // Set en passant target
+        if play.moved_type == PieceType::Pawn
+            && (play.starting_square & Tables::RANK_2 != 0
+                && play.ending_square & Tables::RANK_4 != 0
+                || play.starting_square & Tables::RANK_7 != 0
+                    && play.ending_square & Tables::RANK_5 != 0)
+        {
+            self.en_passant_target = match self.white_to_move {
+                true => play.starting_square << 8,
+                false => play.starting_square >> 8,
+            }
+        } else {
+            self.en_passant_target = 0;
+        }
         self.white_to_move = !self.white_to_move;
+    }
+
+    // Reverts the move from the board. Pops from the move stack
+    pub fn unmake(&mut self, play: &MoveRep) {
+        self.pop_state();
+        if play.ending_square == self.en_passant_target {
+            // Special en passant attack logic
+            // Remember, we have not switch the side to move back yet
+            match !self.white_to_move {
+                true => self.set(play.ending_square << 8, play.attacked_type),
+                false => self.set(play.ending_square >> 8, play.attacked_type),
+            }
+        } else {
+            self.set(play.ending_square, play.attacked_type);
+        }
+        // Put this after the first set because we want to replace the opponents piece
+        self.white_to_move = !self.white_to_move;
+        self.clear(play.ending_square, Some(play.moved_type));
+        self.set(play.starting_square, Some(play.moved_type));
     }
 
     // Clear all bitboards at this mask
@@ -430,43 +499,6 @@ impl BoardState {
                     PieceType::Queen => self.black_queens |= bb,
                     PieceType::King => self.black_king |= bb,
                 }
-            }
-        }
-    }
-
-    // Reverts the move from the board. Pops from the move stack
-    pub fn unmake(&mut self, play: &MoveRep) {
-        // Something is going wrong in unmake
-        // it only happens when attacked is none
-        let first_count = self.occupancy().count_ones();
-        // I guess swapping the order of the next two lines fixed it?
-        self.set(play.ending_square, play.attacked_type);
-        // Put this after the first set because we want to replace the opponents piece
-        self.white_to_move = !self.white_to_move;
-        self.clear(play.ending_square, Some(play.moved_type));
-        self.set(play.starting_square, Some(play.moved_type));
-        let second_count = self.occupancy().count_ones();
-        if play.attacked_type.is_none() {
-            if second_count != first_count {
-                let piece_string = match play.moved_type {
-                    PieceType::Pawn => "pawn",
-                    PieceType::Knight => "knight",
-
-                    _ => "",
-                };
-                let color = match self.white_to_move {
-                    true => "white",
-                    false => "black",
-                };
-                let attacked = match play.attacked_type {
-                    Some(_) => "some",
-                    None => "none",
-                };
-                // print_bitboard(self.occupancy());
-                // println!("{}", piece_string);
-                // println!("{}", color);
-                // println!("{}", attacked);
-                // panic!();
             }
         }
     }
@@ -830,6 +862,37 @@ impl MoveRep {
         Ok(mov)
     }
 
+    /// Returns if the move is reversible
+    pub fn is_reversible(&self) -> bool {
+        // If there is a piece captured, it is not reversible
+        if self.attacked_type.is_some() {
+            return false;
+        }
+
+        // If there is a promotion, it is not reversible
+        if self.promotion.is_some() {
+            return false;
+        }
+
+        // If the piece is a pawn, it is not reversible
+        if self.moved_type == PieceType::Pawn {
+            return false;
+        }
+
+        // If the move is a castle, is is not reversible
+        if self.moved_type == PieceType::King
+            && (self.starting_square == 1 << Tables::E1 && self.ending_square == 1 << Tables::A1)
+            || (self.starting_square == 1 << Tables::E1 && self.ending_square == 1 << Tables::H1)
+            || (self.starting_square == 1 << Tables::E8 && self.ending_square == 1 << Tables::A8)
+            || (self.starting_square == 1 << Tables::E8 && self.ending_square == 1 << Tables::H8)
+        {
+            return false;
+        }
+
+        // If we fell through the above conditions, the move is reversible
+        true
+    }
+
     pub fn mask_to_string(mask: u64) -> Result<String, String> {
         let mut pos = String::new();
 
@@ -992,7 +1055,10 @@ pub fn print_bitboard(bb: u64) {
 
 #[cfg(test)]
 mod tests {
-    use crate::tables::Tables;
+    use core::panic::PanicInfo;
+    use std::fmt::Debug;
+
+    use crate::{generate, tables::Tables};
 
     use super::*;
 
@@ -1958,5 +2024,200 @@ mod tests {
         );
         let result = board.move_safe_for_king(&tables, &play);
         assert_eq!(false, result);
+    }
+
+    #[test]
+    fn test_is_reversible_1() {
+        let mv = MoveRep::new(
+            1 << Tables::D2,
+            1 << Tables::D4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_2() {
+        let mv = MoveRep::new(
+            1 << Tables::B1,
+            1 << Tables::A3,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_is_reversible_3() {
+        let mv = MoveRep::new(
+            1 << Tables::C1,
+            1 << Tables::G5,
+            None,
+            PieceType::Bishop,
+            Some(PieceType::Pawn),
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_4() {
+        let mv = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::A1,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_5() {
+        let mv = MoveRep::new(
+            1 << Tables::G7,
+            1 << Tables::G8,
+            Some(Promotion::Queen),
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_en_passant_1() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B2,
+            1 << Tables::B4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let mv_2 = MoveRep::new(
+            1 << Tables::G8,
+            1 << Tables::F6,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        assert_eq!(board.en_passant_target, 0);
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 1 << Tables::B3);
+        board.make(&mv_2);
+        assert_eq!(board.en_passant_target, 0);
+        board.unmake(&mv_2);
+        assert_eq!(board.en_passant_target, 1 << Tables::B3);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_2() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B1,
+            1 << Tables::C3,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_3() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B2,
+            1 << Tables::B3,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/2N5/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::E7,
+            1 << Tables::E5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 1 << Tables::E6);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_attack_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/8/2Pp4/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_mv = MoveRep::new(
+            1 << Tables::D4,
+            1 << Tables::C3,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+
+        let results = generate(&board, &tables);
+        assert!(results.contains(&expected_mv));
+    }
+
+    #[test]
+    fn test_en_passant_attack_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/2Pp4/8/8/PP1PPPPP/RNBQKBNR w KQkq d6 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_mv = MoveRep::new(
+            1 << Tables::C5,
+            1 << Tables::D6,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+
+        let results = generate(&board, &tables);
+        assert!(results.contains(&expected_mv));
     }
 }

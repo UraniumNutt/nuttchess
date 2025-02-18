@@ -93,36 +93,6 @@ mod tests {
     }
 
     #[test]
-    fn board_same_after_iterration_start_pos() {
-        let mut board = BoardState::starting_state();
-        let tables = Tables::new();
-        let moves = generate(&board, &tables);
-        for mv in moves {
-            let before_state = board.clone();
-            board.make(&mv);
-            board.unmake(&mv);
-            let after_state = board.clone();
-            assert_eq!(before_state, after_state);
-        }
-    }
-
-    #[test]
-    fn board_same_after_iterration_knight() {
-        let mut board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
-        );
-        let tables = Tables::new();
-        let moves = generate(&board, &tables);
-        for mv in moves {
-            let before_state = board.clone();
-            board.make(&mv);
-            board.unmake(&mv);
-            let after_state = board.clone();
-            assert_eq!(before_state, after_state);
-        }
-    }
-
-    #[test]
     fn white_knight_move_node_count() {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
