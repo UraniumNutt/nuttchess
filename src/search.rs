@@ -93,6 +93,14 @@ mod tests {
     }
 
     #[test]
+    fn depth_5() {
+        let mut board = BoardState::starting_state();
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 5);
+        assert_eq!(node_count, 4865609);
+    }
+
+    #[test]
     fn white_knight_move_node_count() {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),

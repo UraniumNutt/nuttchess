@@ -1307,33 +1307,23 @@ mod tests {
         assert!(results.contains(&expected_move));
     }
 
-    // TODO So we probably need to change the relevent masks to include the edges of the board to make the test pass
-    // Howerver, if we change the masks, we will need to generate a new set of magics
-    // #[test]
-    // fn test_sample_bishop_move() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "rnbqkbnr/1ppppp1p/8/p5p1/8/1P6/PBPPPPPP/RN1QKBNR w KQkq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
+    #[test]
+    fn test_sample_bishop_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppppp1p/8/p5p1/8/1P6/PBPPPPPP/RN1QKBNR w KQkq - 0 1".to_string(),
+        );
 
-    //     let expected_move = MoveRep::new(
-    //         1 << Tables::B2,
-    //         1 << Tables::H8,
-    //         None,
-    //         PieceType::Bishop,
-    //         Some(PieceType::Rook),
-    //     );
+        let tables = Tables::new();
 
-    //     // let results = generate(&board, &tables);
-    //     // assert!(results.contains(&expected_move));
-    //     // let mut attacks = tables.get_bishop_attack(Tables::B2 as usize, board.occupancy())
-    //     //     & !board.white_occupancy();
-    //     // print_bitboard(attacks);
+        let expected_move = MoveRep::new(
+            1 << Tables::B2,
+            1 << Tables::H8,
+            None,
+            PieceType::Bishop,
+            Some(PieceType::Rook),
+        );
 
-    //     let mut foo = [0; 64];
-    //     Tables::generate_bishop_occupancy_mask(&mut foo);
-    //     print_bitboard(foo[14]);
-
-    //     panic!();
-    // }
+        let results = generate(&board, &tables);
+        assert!(results.contains(&expected_move));
+    }
 }
