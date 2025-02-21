@@ -5,6 +5,17 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
     // move vector
     let mut moves = vec![];
 
+    // Get the pinned pieces
+    let pinned_pieces = match board.white_to_move {
+        true => board.pin_mask(&tables, board.white_king),
+        false => board.pin_mask(&tables, board.black_king),
+    };
+    // Get the sides to moves king
+    let king = match board.white_to_move {
+        true => board.white_king,
+        false => board.black_king,
+    };
+
     // Get the occupancys
     let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
@@ -22,6 +33,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -34,6 +47,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -46,6 +61,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -58,6 +75,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -70,6 +89,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -83,6 +104,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -125,6 +148,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -137,6 +162,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -149,6 +176,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -161,6 +190,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -173,6 +204,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -186,6 +219,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     white_occupancy,
                     black_occupancy,
                     occupancy,
+                    pinned_pieces,
+                    king,
                     &mut moves,
                 );
             }
@@ -221,8 +256,18 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
 }
 
 // Generate moves which attack the target
-fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) -> Vec<MoveRep> {
+pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) -> Vec<MoveRep> {
     let mut moves = vec![];
+    // Get the pinned pieces
+    let pinned_pieces = match board.white_to_move {
+        true => board.pin_mask(&tables, board.white_king),
+        false => board.pin_mask(&tables, board.black_king),
+    };
+    // Get the sides to moves king
+    let king = match board.white_to_move {
+        true => board.white_king,
+        false => board.black_king,
+    };
 
     // Get the type of piece of the target
     let target_piece_type = board.get_piece_type(target);
@@ -232,7 +277,6 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
         true => board.white_attacking(&tables, target),
         false => board.black_attacking(&tables, target),
     };
-
     // If the possible attacks is empty, there are no capturing moves, so return early
     if possible_attacks == 0 {
         return moves;
@@ -249,11 +293,19 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
             moved_type: piece_type.unwrap(),
             attacked_type: target_piece_type,
         };
-        // moves.push(mv);
-        // TODO Figure out a better way to do this. Why does this not work in the function?
-        let mut mutable_copy = board.clone();
-        if mutable_copy.move_safe_for_king(&tables, &mv) {
-            moves.push(mv);
+        if mv.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &mv) {
+            if mv.moved_type == PieceType::King {
+                let king_safety_mask = match board.white_to_move {
+                    true => board.black_attack_mask_with_transparency(&tables, mv.ending_square),
+                    false => board.white_attack_mask_with_transparency(&tables, mv.ending_square),
+                };
+
+                if mv.ending_square & king_safety_mask == 0 {
+                    moves.push(mv);
+                }
+            } else {
+                moves.push(mv);
+            }
         }
     }
 
@@ -261,7 +313,7 @@ fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64) ->
 }
 
 // Generates moves that block (do not capture) the target. Similar to generate_attacking_moves, but with pawn pushes instead of attacks
-fn generate_target_blocking(
+pub fn generate_target_blocking(
     board: &BoardState,
     tables: &Tables,
     target: u64,
@@ -271,6 +323,16 @@ fn generate_target_blocking(
 
     // Get the type of piece of the target
     let target_piece_type = board.get_piece_type(target);
+    // Get the pinned pieces
+    let pinned_pieces = match board.white_to_move {
+        true => board.pin_mask(&tables, board.white_king),
+        false => board.pin_mask(&tables, board.black_king),
+    };
+    // Get the sides to moves king
+    let king = match board.white_to_move {
+        true => board.white_king,
+        false => board.black_king,
+    };
 
     // Get the mask of pieces which can attack the target
     let mut possible_attacks = match board.white_to_move {
@@ -299,8 +361,11 @@ fn generate_target_blocking(
         };
         // moves.push(mv);
         // TODO Figure out a better way to do this. Why does this not work in the function?
-        let mut mutable_copy = board.clone();
-        if mutable_copy.move_safe_for_king(&tables, &mv) {
+        // let mut mutable_copy = board.clone();
+        // if mutable_copy.move_safe_for_king(&tables, &mv) {
+        //     moves.push(mv);
+        // }
+        if pinned_pieces & mv.starting_square == 0 || board.pin_safe(&tables, king, &mv) {
             moves.push(mv);
         }
     }
@@ -309,13 +374,15 @@ fn generate_target_blocking(
 }
 
 // Generate blocking moves
-fn generate_blocking_moves(
+pub fn generate_blocking_moves(
     board: &BoardState,
     tables: &Tables,
     protect_target: u64,
     attacking_target: u64,
 ) -> Vec<MoveRep> {
     let mut moves = vec![];
+
+    // Get the
 
     // Get the mask of the moves which can be blocked
     let attacking_target_index = attacking_target.trailing_zeros() as u64;
@@ -347,8 +414,14 @@ fn generate_blocking_moves(
                 tables.get_bishop_attack(attacking_target_index as usize, board.occupancy());
             let protected_mask_bishop =
                 tables.get_bishop_attack(protect_target_index as usize, board.occupancy());
-            attackers_mask_rook & protected_mask_rook
-                | attackers_mask_bishop & protected_mask_bishop
+            // We need to find if the ray is rook, or bishop like
+            if attackers_mask_rook & protect_target != 0 {
+                // Rook like
+                attackers_mask_rook & protected_mask_rook
+            } else {
+                // Bishop like
+                attackers_mask_bishop & protected_mask_bishop
+            }
         }
         _ => 0,
     };
@@ -370,7 +443,7 @@ fn generate_blocking_moves(
 }
 
 // Generate moves which move the king to safety
-fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
+pub fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
     let mut moves = vec![];
 
     // Get the king position
@@ -378,28 +451,25 @@ fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
         true => board.white_king,
         false => board.black_king,
     };
+
     let king_index = king.trailing_zeros();
     let mut safe_squares = match board.white_to_move {
         true => {
             tables.king_attacks[king_index as usize]
-                & !board.black_attack_mask(tables)
-                & !board.white_occupancy()
+                & !board.black_attack_mask_with_transparency(tables, king)
+                & !board.occupancy()
         }
         false => {
             tables.king_attacks[king_index as usize]
-                & !board.white_attack_mask(tables)
-                & !board.black_occupancy()
+                & !board.white_attack_mask_with_transparency(tables, king)
+                & !board.occupancy()
         }
     };
     while safe_squares != 0 {
         let end_square = pop_lsb(&mut safe_squares);
         let attacked_type = board.get_piece_type(1 << end_square);
         let mv = MoveRep::new(king, 1 << end_square, None, PieceType::King, attacked_type);
-        // TODO this is an inefficent way of doing this. we need to come up with a diffrent approach
-        let mut local_copy = board.clone();
-        if local_copy.move_safe_for_king(tables, &mv) {
-            moves.push(mv);
-        }
+        moves.push(mv);
     }
 
     moves
@@ -412,6 +482,8 @@ fn white_pawn_moves(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut pawn_bb = board.white_pawns;
@@ -436,7 +508,10 @@ fn white_pawn_moves(
                     PieceType::Pawn,
                     attacked_type,
                 );
-                moves.push(push);
+                if push.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &push)
+                {
+                    moves.push(push);
+                }
             }
         }
     }
@@ -455,7 +530,14 @@ fn white_pawn_moves(
                 PieceType::Pawn,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
+            }
         }
     }
     // White Pawn En Passant Attacks
@@ -477,7 +559,11 @@ fn white_pawn_moves(
                     attacked_type,
                     Some(PieceType::Pawn),
                 );
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -490,6 +576,8 @@ fn white_knight_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut knight_bb = board.white_knights;
@@ -507,7 +595,11 @@ fn white_knight_attacks(
                     PieceType::Knight,
                     attacked_type,
                 );
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -520,6 +612,8 @@ fn white_rook_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut rook_bb = board.white_rooks;
@@ -536,7 +630,10 @@ fn white_rook_attacks(
                 PieceType::Rook,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -548,6 +645,8 @@ fn white_bishop_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut bishop_bb = board.white_bishops;
@@ -564,7 +663,10 @@ fn white_bishop_attacks(
                 moved_type: PieceType::Bishop,
                 attacked_type: attacked_type,
             };
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -576,6 +678,8 @@ fn white_queen_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     // Rook like
@@ -593,7 +697,10 @@ fn white_queen_attacks(
                 PieceType::Queen,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 
@@ -612,7 +719,10 @@ fn white_queen_attacks(
                 moved_type: PieceType::Queen,
                 attacked_type: attacked_type,
             };
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -624,6 +734,8 @@ fn white_king_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut king_bb = board.white_king;
@@ -642,7 +754,11 @@ fn white_king_attacks(
                 attacked_type: attacked_type,
             };
             if black_attack_mask & 1 << end_square == 0 {
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -655,6 +771,8 @@ fn black_pawn_moves(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut pawn_bb = board.black_pawns;
@@ -679,7 +797,10 @@ fn black_pawn_moves(
                     PieceType::Pawn,
                     attacked_type,
                 );
-                moves.push(push);
+                if push.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &push)
+                {
+                    moves.push(push);
+                }
             }
         }
     }
@@ -698,7 +819,10 @@ fn black_pawn_moves(
                 PieceType::Pawn,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 
@@ -721,7 +845,11 @@ fn black_pawn_moves(
                     attacked_type,
                     Some(PieceType::Pawn),
                 );
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -734,6 +862,8 @@ fn black_knight_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut knight_bb = board.black_knights;
@@ -751,7 +881,11 @@ fn black_knight_attacks(
                     PieceType::Knight,
                     attacked_type,
                 );
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -764,6 +898,8 @@ fn black_rook_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut rook_bb = board.black_rooks;
@@ -780,7 +916,10 @@ fn black_rook_attacks(
                 PieceType::Rook,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -792,6 +931,8 @@ fn black_bishop_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut bishop_bb = board.black_bishops;
@@ -808,7 +949,10 @@ fn black_bishop_attacks(
                 moved_type: PieceType::Bishop,
                 attacked_type: attacked_type,
             };
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -820,6 +964,8 @@ fn black_queen_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut rook_bb = board.black_queens;
@@ -836,7 +982,10 @@ fn black_queen_attacks(
                 PieceType::Queen,
                 attacked_type,
             );
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 
@@ -855,7 +1004,10 @@ fn black_queen_attacks(
                 moved_type: PieceType::Queen,
                 attacked_type: attacked_type,
             };
-            moves.push(attack);
+            if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
+            {
+                moves.push(attack);
+            }
         }
     }
 }
@@ -867,6 +1019,8 @@ fn black_king_attacks(
     white_occupancy: u64,
     black_occupancy: u64,
     occupancy: u64,
+    pinned_pieces: u64,
+    king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
     let mut king_bb = board.black_king;
@@ -885,7 +1039,11 @@ fn black_king_attacks(
                 attacked_type: attacked_type,
             };
             if white_attack_mask & 1 << end_square == 0 {
-                moves.push(attack);
+                if attack.starting_square & pinned_pieces == 0
+                    || board.pin_safe(&tables, king, &attack)
+                {
+                    moves.push(attack);
+                }
             }
         }
     }
@@ -1308,6 +1466,20 @@ mod tests {
     }
 
     #[test]
+    fn king_escape_5() {
+        let board = BoardState::state_from_string_fen(
+            "rnbq1bnr/ppppkppp/4pB2/8/8/1P6/P1PPPPPP/RN1QKBNR b - - 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+        let results = generate(&board, &tables);
+        for mv in &results {
+            println!("{:?}", mv);
+        }
+        assert_eq!(results.len(), 5);
+    }
+
+    #[test]
     fn test_sample_bishop_move() {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/1ppppp1p/8/p5p1/8/1P6/PBPPPPPP/RN1QKBNR w KQkq - 0 1".to_string(),
@@ -1326,4 +1498,32 @@ mod tests {
         let results = generate(&board, &tables);
         assert!(results.contains(&expected_move));
     }
+
+    // #[test]
+    // fn test_no_redundant_moves() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "rnbq1bnr/ppppkppp/4pB2/8/8/1P6/P1PPPPPP/RN1QKBNR b - - 0 1".to_string(),
+    //     );
+
+    //     let tables = Tables::new();
+    //     let attacking_target = 1 << Tables::F6;
+    //     let protect_target = 1 << Tables::E7;
+    //     let group_1 = &mut generate_attacking_moves(&board, &tables, attacking_target);
+    //     let group_2 =
+    //         &mut generate_blocking_moves(&board, &tables, protect_target, attacking_target);
+    //     let group_3 = &mut move_king_to_safety(&board, &tables);
+    //     println!("Group 1");
+    //     for mv in group_1 {
+    //         println!("{:?}", mv);
+    //     }
+    //     println!("Group 2");
+    //     for mv in group_2 {
+    //         println!("{:?}", mv);
+    //     }
+    //     println!("Group 3");
+    //     for mv in group_3 {
+    //         println!("{:?}", mv);
+    //     }
+    //     panic!();
+    // }
 }
