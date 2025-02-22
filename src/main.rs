@@ -29,4 +29,36 @@ fn main() {
         }
     }
     perft(&mut board, depth.parse::<u64>().unwrap() as usize);
+
+    // Generate magics
+    // let mut rook_magics = [0; 64];
+    // let mut bishop_magics = [0; 64];
+    // let mut rook_mask = [0; 64];
+    // let mut bishop_mask = [0; 64];
+    // Tables::generate_rook_occupancy_mask(&mut rook_mask);
+    // Tables::generate_bishop_occupancy_mask(&mut bishop_mask);
+    // for square in 0..64 {
+    //     rook_magics[square] = Tables::generate_magic(
+    //         rook_mask[square],
+    //         square,
+    //         rook_mask[square].count_ones() as u64,
+    //         &Tables::calculate_relevent_rook_occupancy,
+    //     );
+    //     bishop_magics[square] = Tables::generate_magic(
+    //         bishop_mask[square],
+    //         square,
+    //         bishop_mask[square].count_ones() as u64,
+    //         &Tables::calculate_relevent_bishop_occupancy,
+    //     );
+    // }
+
+    // println!("Rook magics: ");
+    // for square in 0..64 {
+    //     println!("{:#018x}", rook_magics[square]);
+    // }
+
+    // println!("Bishop magics: ");
+    // for square in 0..64 {
+    //     println!("{:#018x}", bishop_magics[square]);
+    // }
 }

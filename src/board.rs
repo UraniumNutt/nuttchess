@@ -24,12 +24,12 @@ pub struct BoardState {
     pub white_to_move: bool,
     pub en_passant_target: u64,
     pub reversable_move_counter: u8,
-    pub fullmove_counter: u16,
+    pub full_move_counter: u16,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MoveRep {
     pub starting_square: u64,
     pub ending_square: u64,
@@ -56,7 +56,7 @@ impl MoveRep {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Promotion {
     Queen,
     Bishop,
@@ -65,7 +65,7 @@ pub enum Promotion {
 }
 
 // Helps the move maker know what bitboard to manipulate
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -125,7 +125,7 @@ impl BoardState {
             white_to_move: true,
             en_passant_target: 0x0,
             reversable_move_counter: 0,
-            fullmove_counter: 0,
+            full_move_counter: 1,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         }
@@ -154,7 +154,7 @@ impl BoardState {
             white_to_move: true,
             en_passant_target: 0,
             reversable_move_counter: 0,
-            fullmove_counter: 0,
+            full_move_counter: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         }
@@ -313,7 +313,7 @@ impl BoardState {
         // Parse the fullmove counter
         if let Some(full_move_clock) = fen_tokens.next() {
             if let Ok(full_move_clock_int) = full_move_clock.parse::<u16>() {
-                state.fullmove_counter = full_move_clock_int;
+                state.full_move_counter = full_move_clock_int;
             } else {
                 return Err("Error parsing the number of fullmoves".to_string());
             }
@@ -325,7 +325,7 @@ impl BoardState {
     }
 
     pub fn state_from_string_fen(fen_string: String) -> BoardState {
-        let mut tokens = fen_string.split(" ");
+        let tokens = fen_string.split(" ");
         BoardState::state_from_fen(tokens).unwrap()
     }
 
@@ -353,14 +353,83 @@ impl BoardState {
         self.make(&move_rep);
     }
 
+    /// Pushes the current nonreversible state to the stack
+    fn push_state(&mut self) {
+        let mut frame = MoveStackFrame::new();
+        frame.en_passant_target = self.en_passant_target;
+        frame.reversable_move_counter = self.reversable_move_counter;
+        frame.fullmove_counter = self.full_move_counter;
+        frame.white_queenside_castle_rights = self.white_queenside_castle_rights;
+        frame.white_kingside_castle_rights = self.white_kingside_castle_rights;
+        frame.black_queenside_castle_rights = self.black_queenside_castle_rights;
+        frame.black_kingside_castle_rights = self.black_kingside_castle_rights;
+        self.move_stack.push(frame);
+        self.move_stack_pointer += 1;
+    }
+
+    /// Pops the nonreversible state from the stack
+    fn pop_state(&mut self) {
+        self.move_stack_pointer -= 1;
+        let frame = self.move_stack.pop().unwrap();
+        self.en_passant_target = frame.en_passant_target;
+        self.reversable_move_counter = frame.reversable_move_counter;
+        self.full_move_counter = frame.fullmove_counter;
+        self.white_queenside_castle_rights = frame.white_queenside_castle_rights;
+        self.white_kingside_castle_rights = frame.white_kingside_castle_rights;
+        self.black_queenside_castle_rights = frame.black_queenside_castle_rights;
+        self.black_kingside_castle_rights = frame.black_kingside_castle_rights;
+    }
+
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
         self.clear(play.starting_square, Some(play.moved_type));
-        self.clear_all(play.ending_square);
-        // self.clear_all(play.ending_square);
+        if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
+            // Special en passant attack logic
+            match self.white_to_move {
+                true => self.clear_all(play.ending_square >> 8),
+                false => self.clear_all(play.ending_square << 8),
+            }
+        } else {
+            // Normal attack clear
+            self.clear_all(play.ending_square);
+        }
         self.set(play.ending_square, Some(play.moved_type));
         // Do special logic here
+        self.push_state();
+        // Set en passant target
+        if play.moved_type == PieceType::Pawn
+            && (play.starting_square & Tables::RANK_2 != 0
+                && play.ending_square & Tables::RANK_4 != 0
+                || play.starting_square & Tables::RANK_7 != 0
+                    && play.ending_square & Tables::RANK_5 != 0)
+        {
+            self.en_passant_target = match self.white_to_move {
+                true => play.starting_square << 8,
+                false => play.starting_square >> 8,
+            }
+        } else {
+            self.en_passant_target = 0;
+        }
         self.white_to_move = !self.white_to_move;
+    }
+
+    // Reverts the move from the board. Pops from the move stack
+    pub fn unmake(&mut self, play: &MoveRep) {
+        self.pop_state();
+        if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
+            // Special en passant attack logic
+            // Remember, we have not switch the side to move back yet
+            match !self.white_to_move {
+                true => self.set(play.ending_square >> 8, play.attacked_type),
+                false => self.set(play.ending_square << 8, play.attacked_type),
+            }
+        } else {
+            self.set(play.ending_square, play.attacked_type);
+        }
+        // Put this after the first set because we want to replace the opponents piece
+        self.white_to_move = !self.white_to_move;
+        self.clear(play.ending_square, Some(play.moved_type));
+        self.set(play.starting_square, Some(play.moved_type));
     }
 
     // Clear all bitboards at this mask
@@ -434,43 +503,6 @@ impl BoardState {
         }
     }
 
-    // Reverts the move from the board. Pops from the move stack
-    pub fn unmake(&mut self, play: &MoveRep) {
-        // Something is going wrong in unmake
-        // it only happens when attacked is none
-        let first_count = self.occupancy().count_ones();
-        // I guess swapping the order of the next two lines fixed it?
-        self.set(play.ending_square, play.attacked_type);
-        // Put this after the first set because we want to replace the opponents piece
-        self.white_to_move = !self.white_to_move;
-        self.clear(play.ending_square, Some(play.moved_type));
-        self.set(play.starting_square, Some(play.moved_type));
-        let second_count = self.occupancy().count_ones();
-        if play.attacked_type.is_none() {
-            if second_count != first_count {
-                let piece_string = match play.moved_type {
-                    PieceType::Pawn => "pawn",
-                    PieceType::Knight => "knight",
-
-                    _ => "",
-                };
-                let color = match self.white_to_move {
-                    true => "white",
-                    false => "black",
-                };
-                let attacked = match play.attacked_type {
-                    Some(_) => "some",
-                    None => "none",
-                };
-                // print_bitboard(self.occupancy());
-                // println!("{}", piece_string);
-                // println!("{}", color);
-                // println!("{}", attacked);
-                // panic!();
-            }
-        }
-    }
-
     #[inline]
     pub fn white_occupancy(&self) -> u64 {
         self.white_pawns
@@ -516,16 +548,16 @@ impl BoardState {
         if self.white_knights & mask != 0 || self.black_knights & mask != 0 {
             return Some(PieceType::Knight);
         }
-        if self.white_bishops & mask != 0 || self.white_bishops & mask != 0 {
+        if self.white_bishops & mask != 0 || self.black_bishops & mask != 0 {
             return Some(PieceType::Bishop);
         }
-        if self.white_rooks & mask != 0 || self.white_rooks & mask != 0 {
+        if self.white_rooks & mask != 0 || self.black_rooks & mask != 0 {
             return Some(PieceType::Rook);
         }
-        if self.white_queens & mask != 0 || self.white_queens & mask != 0 {
+        if self.white_queens & mask != 0 || self.black_queens & mask != 0 {
             return Some(PieceType::Queen);
         }
-        if self.white_king & mask != 0 || self.white_king & mask != 0 {
+        if self.white_king & mask != 0 || self.black_king & mask != 0 {
             return Some(PieceType::King);
         }
 
@@ -533,28 +565,28 @@ impl BoardState {
     }
 
     // Get the attack map of white
-    pub fn white_attack_mask(&self, table: &Tables) -> u64 {
+    pub fn white_attack_mask(&self, tables: &Tables) -> u64 {
         let mut attack_mask = 0;
 
         // White pawns
         let mut pawn_bb = self.white_pawns;
         while pawn_bb != 0 {
             let start_square = pop_lsb(&mut pawn_bb);
-            attack_mask |= table.white_pawn_attacks[start_square];
+            attack_mask |= tables.white_pawn_attacks[start_square];
         }
 
         // White knights
         let mut knight_bb = self.white_knights;
         while knight_bb != 0 {
             let start_square = pop_lsb(&mut knight_bb);
-            attack_mask |= table.knight_attacks[start_square];
+            attack_mask |= tables.knight_attacks[start_square];
         }
 
         // White bishops
         let mut bishop_bb = self.white_bishops;
         while bishop_bb != 0 {
             let start_square = pop_lsb(&mut bishop_bb);
-            let mut bishop_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            let mut bishop_attacks = tables.get_bishop_attack(start_square, self.occupancy());
             while bishop_attacks != 0 {
                 let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
                 attack_mask |= attack_square;
@@ -564,7 +596,7 @@ impl BoardState {
         let mut rook_bb = self.white_rooks;
         while rook_bb != 0 {
             let start_square = pop_lsb(&mut rook_bb);
-            let mut rook_attacks = table.get_rook_attack(start_square, self.occupancy());
+            let mut rook_attacks = tables.get_rook_attack(start_square, self.occupancy());
             while rook_attacks != 0 {
                 let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
                 attack_mask |= attack_square;
@@ -576,7 +608,7 @@ impl BoardState {
         let mut bishop_bb_part = self.white_queens;
         while bishop_bb_part != 0 {
             let start_square = pop_lsb(&mut bishop_bb_part);
-            let mut bishop_part_attacks = table.get_bishop_attack(start_square, self.occupancy());
+            let mut bishop_part_attacks = tables.get_bishop_attack(start_square, self.occupancy());
             while bishop_part_attacks != 0 {
                 let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
                 attack_mask |= attack_square;
@@ -586,7 +618,7 @@ impl BoardState {
         let mut rook_bb_part = self.white_queens;
         while rook_bb_part != 0 {
             let start_square = pop_lsb(&mut rook_bb_part);
-            let mut rook_part_attacks = table.get_rook_attack(start_square, self.occupancy());
+            let mut rook_part_attacks = tables.get_rook_attack(start_square, self.occupancy());
             while rook_part_attacks != 0 {
                 let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
                 attack_mask |= attack_square;
@@ -597,7 +629,103 @@ impl BoardState {
         let mut king_bb = self.white_king;
         while king_bb != 0 {
             let start_square = pop_lsb(&mut king_bb);
-            attack_mask |= table.king_attacks[start_square];
+            attack_mask |= tables.king_attacks[start_square];
+        }
+
+        attack_mask
+    }
+
+    // Get the attack map of white with transparency
+    pub fn white_attack_mask_with_transparency(&self, tables: &Tables, transparency: u64) -> u64 {
+        let mut attack_mask = 0;
+
+        // White pawns
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.white_pawn_attacks[start_square];
+        }
+
+        // White knights
+        let mut knight_bb = self.white_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= tables.knight_attacks[start_square];
+        }
+
+        // White bishops
+        let mut bishop_bb = self.white_bishops;
+        while bishop_bb != 0 {
+            let start_square = pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks =
+                tables.get_bishop_attack(start_square, self.occupancy() & !transparency);
+            while bishop_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+        // White rooks
+        let mut rook_bb = self.white_rooks;
+        while rook_bb != 0 {
+            let start_square = pop_lsb(&mut rook_bb);
+            let mut rook_attacks =
+                tables.get_rook_attack(start_square, self.occupancy() & !transparency);
+            while rook_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // White queens
+
+        let mut bishop_bb_part = self.white_queens;
+        while bishop_bb_part != 0 {
+            let start_square = pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks =
+                tables.get_bishop_attack(start_square, self.occupancy() & !transparency);
+            while bishop_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.white_queens;
+        while rook_bb_part != 0 {
+            let start_square = pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks =
+                tables.get_rook_attack(start_square, self.occupancy() & !transparency);
+            while rook_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // White king
+        let mut king_bb = self.white_king;
+        while king_bb != 0 {
+            let start_square = pop_lsb(&mut king_bb);
+            attack_mask |= tables.king_attacks[start_square];
+        }
+
+        attack_mask
+    }
+
+    // Gets the attack mask of only the white leapers
+    pub fn white_leaper_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        // White pawns
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.white_pawn_attacks[start_square];
+        }
+
+        // White knights
+        let mut knight_bb = self.white_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= tables.knight_attacks[start_square];
         }
 
         attack_mask
@@ -674,12 +802,108 @@ impl BoardState {
         attack_mask
     }
 
+    // Get the attack map of black with transparency
+    pub fn black_attack_mask_with_transparency(&self, table: &Tables, transparency: u64) -> u64 {
+        let mut attack_mask = 0;
+
+        // black pawns
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= table.black_pawn_attacks[start_square];
+        }
+
+        // black knights
+        let mut knight_bb = self.black_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= table.knight_attacks[start_square];
+        }
+
+        // black bishops
+        let mut bishop_bb = self.black_bishops;
+        while bishop_bb != 0 {
+            let start_square = pop_lsb(&mut bishop_bb);
+            let mut bishop_attacks =
+                table.get_bishop_attack(start_square, self.occupancy() & !transparency);
+            while bishop_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+        // black rooks
+        let mut rook_bb = self.black_rooks;
+        while rook_bb != 0 {
+            let start_square = pop_lsb(&mut rook_bb);
+            let mut rook_attacks =
+                table.get_rook_attack(start_square, self.occupancy() & !transparency);
+            while rook_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // black queens
+
+        let mut bishop_bb_part = self.black_queens;
+        while bishop_bb_part != 0 {
+            let start_square = pop_lsb(&mut bishop_bb_part);
+            let mut bishop_part_attacks =
+                table.get_bishop_attack(start_square, self.occupancy() & !transparency);
+            while bishop_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut bishop_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        let mut rook_bb_part = self.black_queens;
+        while rook_bb_part != 0 {
+            let start_square = pop_lsb(&mut rook_bb_part);
+            let mut rook_part_attacks =
+                table.get_rook_attack(start_square, self.occupancy() & !transparency);
+            while rook_part_attacks != 0 {
+                let attack_square = 1 << pop_lsb(&mut rook_part_attacks) as u64;
+                attack_mask |= attack_square;
+            }
+        }
+
+        // black king
+        let mut king_bb = self.black_king;
+        while king_bb != 0 {
+            let start_square = pop_lsb(&mut king_bb);
+            attack_mask |= table.king_attacks[start_square];
+        }
+
+        attack_mask
+    }
+
+    // Gets the attack mask of only the black leapers
+    pub fn black_leaper_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        // black pawns
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.black_pawn_attacks[start_square];
+        }
+
+        // black knights
+        let mut knight_bb = self.black_knights;
+        while knight_bb != 0 {
+            let start_square = pop_lsb(&mut knight_bb);
+            attack_mask |= tables.knight_attacks[start_square];
+        }
+
+        attack_mask
+    }
+
     // Gets the mask of the white pieces that attack the given piece mask
-    pub fn white_attacking(&self, tables: &Tables, piece_mask: u64) -> u64 {
+    pub fn white_attacking(&self, tables: &Tables, target: u64) -> u64 {
         // attacking mask
         let mut attacking_mask = 0;
         // turn the piece mask into an index
-        let piece_index = piece_mask.trailing_zeros() as usize;
+        let piece_index = target.trailing_zeros() as usize;
 
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
@@ -699,6 +923,40 @@ impl BoardState {
         attacking_mask |= tables.king_attacks[piece_index] & self.white_king;
 
         attacking_mask
+    }
+
+    // Get the mask of the white pices that 'block' the target. Similar to white_attacking, but with pawn pushes instead of attacks.
+    pub fn white_blocking(&self, tables: &Tables, target: u64) -> u64 {
+        // blocking mask
+        let mut blocking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = target.trailing_zeros() as usize;
+
+        // Check blocking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        // Single push
+        if target >> 8 & self.white_pawns != 0 {
+            blocking_mask |= target >> 8 & self.white_pawns;
+        }
+        // Double push
+        if target >> 16 & self.white_pawns != 0 && target >> 8 & self.occupancy() == 0 {
+            blocking_mask |= target >> 16 & self.white_pawns;
+        }
+        // blocking_mask |= tables.black_pawn_push[piece_index] & self.white_pawns;
+        // Check blocking knights
+        blocking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
+        // Check blocking rooks
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_rooks;
+        // Check blocking bishops
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_bishops;
+        // Check blocking queens
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.white_queens;
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.white_queens;
+        // NOTE No blocking kings because that should never happen
+
+        blocking_mask
     }
 
     // Gets the mask of the black pieces that attack the given piece mask
@@ -728,6 +986,156 @@ impl BoardState {
         attacking_mask
     }
 
+    // Get the mask of the black pices that 'block' the target. Similar to black_attacking, but with pawn pushes instead of attacks.
+    pub fn black_blocking(&self, tables: &Tables, target: u64) -> u64 {
+        // blocking mask
+        let mut blocking_mask = 0;
+        // turn the piece mask into an index
+        let piece_index = target.trailing_zeros() as usize;
+
+        // Check blocking pawns
+        // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
+        // blocking_mask |= tables.white_pawn_push[piece_index] & self.black_pawns;
+        // Single push
+        if target << 8 & self.black_pawns != 0 {
+            blocking_mask |= target << 8 & self.black_pawns;
+        }
+        // Double push
+        if target << 16 & self.black_pawns != 0 && target << 8 & self.occupancy() == 0 {
+            blocking_mask |= target << 16 & self.black_pawns;
+        }
+        // Check blocking knights
+        blocking_mask |= tables.knight_attacks[piece_index] & self.black_knights;
+        // Check blocking rooks
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_rooks;
+        // Check blocking bishops
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_bishops;
+        // Check blocking queens
+        blocking_mask |= tables.get_rook_attack(piece_index, self.occupancy()) & self.black_queens;
+        blocking_mask |=
+            tables.get_bishop_attack(piece_index, self.occupancy()) & self.black_queens;
+        // NOTE No blocking kings because that should never happen
+
+        blocking_mask
+    }
+
+    /// Gets the mask of the pieces pinned to the target
+    pub fn pin_mask(&self, tables: &Tables, target: u64) -> u64 {
+        let target_index = target.trailing_zeros() as usize;
+        let mask = match self.white_to_move {
+            true => {
+                let mut mask = 0;
+                // Project a rook ray without any blockers
+                let rook_ray =
+                    tables.get_rook_attack(target_index, self.black_rooks | self.black_queens);
+                // Get the pieces that could attack if there were no blockers
+                let mut connected_pieces = rook_ray & (self.black_rooks | self.black_queens);
+                while connected_pieces != 0 {
+                    let attacker_index = pop_lsb(&mut connected_pieces);
+                    // Look back to the target without any blockers
+                    let attacker_ray = tables.get_rook_attack(attacker_index, target);
+                    // Get the mask which must protect the target
+                    let blocker_mask = rook_ray & attacker_ray;
+                    // If there is only one piece in the way, add it to the mask if its the current sides color
+                    if (blocker_mask & self.occupancy()).count_ones() == 1 {
+                        mask |= blocker_mask & self.white_occupancy();
+                    }
+                }
+
+                // Now do the same thing with bishop rays
+                // Project a bishop ray without any blockers
+                let bishop_ray =
+                    tables.get_bishop_attack(target_index, self.black_bishops | self.black_queens);
+                // Get the pieces that could attack if there were no blockers
+                let mut connected_pieces = bishop_ray & (self.black_bishops | self.black_queens);
+                while connected_pieces != 0 {
+                    let attacker_index = pop_lsb(&mut connected_pieces);
+                    // Look back to the target without any blockers
+                    let attacker_ray = tables.get_bishop_attack(attacker_index, target);
+                    // Get the mask which must protect the target
+                    let blocker_mask = bishop_ray & attacker_ray;
+                    // If there is only one piece in the way, add it to the mask if its the current sides color
+                    if (blocker_mask & self.occupancy()).count_ones() == 1 {
+                        mask |= blocker_mask & self.white_occupancy();
+                    }
+                }
+                // Return the mask
+                mask
+            }
+            false => {
+                let mut mask = 0;
+                // Project a rook ray without any blockers
+                let rook_ray =
+                    tables.get_rook_attack(target_index, self.white_rooks | self.white_queens);
+                // Get the pieces that could attack if there were no blockers
+                let mut connected_pieces = rook_ray & (self.white_rooks | self.white_queens);
+                while connected_pieces != 0 {
+                    let attacker_index = pop_lsb(&mut connected_pieces);
+                    // Look back to the target without any blockers
+                    let attacker_ray = tables.get_rook_attack(attacker_index, target);
+                    // Get the mask which must protect the target
+                    let blocker_mask = rook_ray & attacker_ray;
+                    // If there is only one piece in the way, add it to the mask if its the current sides color
+                    if (blocker_mask & self.occupancy()).count_ones() == 1 {
+                        mask |= blocker_mask & self.black_occupancy();
+                    }
+                }
+
+                // Now do the same thing with bishop rays
+                // Project a bishop ray without any blockers
+                let bishop_ray =
+                    tables.get_bishop_attack(target_index, self.white_bishops | self.white_queens);
+                // Get the pieces that could attack if there were no blockers
+                let mut connected_pieces = bishop_ray & (self.white_bishops | self.white_queens);
+                while connected_pieces != 0 {
+                    let attacker_index = pop_lsb(&mut connected_pieces);
+                    // Look back to the target without any blockers
+                    let attacker_ray = tables.get_bishop_attack(attacker_index, target);
+                    // Get the mask which must protect the target
+                    let blocker_mask = bishop_ray & attacker_ray;
+                    // If there is only one piece in the way, add it to the mask if its the current sides color
+                    if (blocker_mask & self.occupancy()).count_ones() == 1 {
+                        mask |= blocker_mask & self.black_occupancy();
+                    }
+                }
+                // Return the mask
+                mask
+            }
+        };
+        mask
+    }
+
+    // Tests if the target is safe from a ray attack after the move rep
+    pub fn pin_safe(&self, tables: &Tables, target: u64, mv: &MoveRep) -> bool {
+        // The occupancy after the move would be made
+        let after_occupancy = self.occupancy() & !mv.starting_square | mv.ending_square;
+        let target_index = target.trailing_zeros() as usize;
+        // A move which attacks the attacker is safe, unless the attackers space is also under attack
+
+        // Get the relevent attackers, and remove them if they are attacked by the move
+        let rook_like_mask = match self.white_to_move {
+            true => (self.black_rooks | self.black_queens) & !mv.ending_square,
+            false => (self.white_rooks | self.white_queens) & !mv.ending_square,
+        };
+        let bishop_like_mask = match self.white_to_move {
+            true => (self.black_bishops | self.black_queens) & !mv.ending_square,
+            false => (self.white_bishops | self.white_queens) & !mv.ending_square,
+        };
+
+        // Project rays from the target and check if the target could be attacked
+        let rook_ray = tables.get_rook_attack(target_index, after_occupancy);
+        if rook_ray & rook_like_mask != 0 {
+            return false;
+        }
+        let bishop_ray = tables.get_bishop_attack(target_index, after_occupancy);
+        if bishop_ray & bishop_like_mask != 0 {
+            return false;
+        }
+
+        true
+    }
+
     // Get if the white king is in check
     pub fn white_in_check(&self, table: &Tables) -> bool {
         let black_attack_mask = self.black_attack_mask(table);
@@ -739,6 +1147,17 @@ impl BoardState {
         let white_attack_mask = self.white_attack_mask(table);
         white_attack_mask & self.black_king != 0
     }
+
+    // Checks that the move will not result in check
+    pub fn move_safe_for_king(&mut self, table: &Tables, play: &MoveRep) -> bool {
+        self.make(&play);
+        let is_safe = !match self.white_to_move {
+            true => self.black_in_check(&table),
+            false => self.white_in_check(&table),
+        };
+        self.unmake(&play);
+        is_safe
+    }
 }
 
 impl MoveRep {
@@ -749,6 +1168,37 @@ impl MoveRep {
         mov.push_str(MoveRep::mask_to_string(start).unwrap().as_ref());
         mov.push_str(MoveRep::mask_to_string(end).unwrap().as_ref());
         Ok(mov)
+    }
+
+    /// Returns if the move is reversible
+    pub fn is_reversible(&self) -> bool {
+        // If there is a piece captured, it is not reversible
+        if self.attacked_type.is_some() {
+            return false;
+        }
+
+        // If there is a promotion, it is not reversible
+        if self.promotion.is_some() {
+            return false;
+        }
+
+        // If the piece is a pawn, it is not reversible
+        if self.moved_type == PieceType::Pawn {
+            return false;
+        }
+
+        // If the move is a castle, is is not reversible
+        if self.moved_type == PieceType::King
+            && (self.starting_square == 1 << Tables::E1 && self.ending_square == 1 << Tables::A1)
+            || (self.starting_square == 1 << Tables::E1 && self.ending_square == 1 << Tables::H1)
+            || (self.starting_square == 1 << Tables::E8 && self.ending_square == 1 << Tables::A8)
+            || (self.starting_square == 1 << Tables::E8 && self.ending_square == 1 << Tables::H8)
+        {
+            return false;
+        }
+
+        // If we fell through the above conditions, the move is reversible
+        true
     }
 
     pub fn mask_to_string(mask: u64) -> Result<String, String> {
@@ -913,7 +1363,10 @@ pub fn print_bitboard(bb: u64) {
 
 #[cfg(test)]
 mod tests {
-    use crate::tables::Tables;
+    use core::panic::PanicInfo;
+    use std::fmt::Debug;
+
+    use crate::{generate, tables::Tables};
 
     use super::*;
 
@@ -1812,4 +2265,450 @@ mod tests {
         let result = board.black_attacking(&tables, 1 << Tables::H1);
         assert_eq!(expected, result);
     }
+
+    #[test]
+    fn test_safe_for_king_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E2,
+            1 << Tables::E4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "rn1qkbnr/p1pppppp/b7/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::E2,
+            None,
+            PieceType::King,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(false, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_3() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppp1ppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::E7,
+            None,
+            PieceType::King,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_safe_for_king_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/Q7/8/PP1PPPPP/RNB1KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let play = MoveRep::new(
+            1 << Tables::D7,
+            1 << Tables::D6,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+        let result = board.move_safe_for_king(&tables, &play);
+        assert_eq!(false, result);
+    }
+
+    #[test]
+    fn test_is_reversible_1() {
+        let mv = MoveRep::new(
+            1 << Tables::D2,
+            1 << Tables::D4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_2() {
+        let mv = MoveRep::new(
+            1 << Tables::B1,
+            1 << Tables::A3,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_is_reversible_3() {
+        let mv = MoveRep::new(
+            1 << Tables::C1,
+            1 << Tables::G5,
+            None,
+            PieceType::Bishop,
+            Some(PieceType::Pawn),
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_4() {
+        let mv = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::A1,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_reversible_5() {
+        let mv = MoveRep::new(
+            1 << Tables::G7,
+            1 << Tables::G8,
+            Some(Promotion::Queen),
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = mv.is_reversible();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_en_passant_1() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B2,
+            1 << Tables::B4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let mv_2 = MoveRep::new(
+            1 << Tables::G8,
+            1 << Tables::F6,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        assert_eq!(board.en_passant_target, 0);
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 1 << Tables::B3);
+        board.make(&mv_2);
+        assert_eq!(board.en_passant_target, 0);
+        board.unmake(&mv_2);
+        assert_eq!(board.en_passant_target, 1 << Tables::B3);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_2() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B1,
+            1 << Tables::C3,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_3() {
+        let mut board = BoardState::starting_state();
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::B2,
+            1 << Tables::B3,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/2N5/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
+        );
+
+        let mv_1 = MoveRep::new(
+            1 << Tables::E7,
+            1 << Tables::E5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        board.make(&mv_1);
+        assert_eq!(board.en_passant_target, 1 << Tables::E6);
+        board.unmake(&mv_1);
+        assert_eq!(board.en_passant_target, 0);
+    }
+
+    #[test]
+    fn test_en_passant_attack_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/8/2Pp4/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_mv = MoveRep::new(
+            1 << Tables::D4,
+            1 << Tables::C3,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+
+        let results = generate(&board, &tables);
+        assert!(results.contains(&expected_mv));
+    }
+
+    #[test]
+    fn test_en_passant_attack_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppp1pppp/8/2Pp4/8/8/PP1PPPPP/RNBQKBNR w KQkq d6 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_mv = MoveRep::new(
+            1 << Tables::C5,
+            1 << Tables::D6,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+
+        let results = generate(&board, &tables);
+        assert!(results.contains(&expected_mv));
+    }
+
+    #[test]
+    fn test_en_passant_move_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/p1pppppp/8/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 1".to_string(),
+        );
+
+        let tables = Tables::new();
+
+        let expected_mv = MoveRep::new(
+            1 << Tables::A5,
+            1 << Tables::B6,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+
+        board.make(&expected_mv);
+        print_bitboard(board.occupancy());
+        assert_eq!(board.black_pawns, 0xbf000000000000);
+        board.unmake(&expected_mv);
+        assert_eq!(board.black_pawns, 0xbf004000000000);
+    }
+
+    #[test]
+    fn test_pin_mask_1() {
+        let board = BoardState::state_from_string_fen(
+            "1nbqkbnr/pppppppp/8/4r3/8/8/PPPPQPPP/RNB1KBNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let target = 1 << Tables::E1;
+        let expected = 1 << Tables::E2;
+        let mask = board.pin_mask(&tables, target);
+        assert_eq!(mask, expected);
+    }
+
+    #[test]
+    fn test_pin_mask_2() {
+        let board = BoardState::state_from_string_fen(
+            "1nbqkbnr/pppppppp/8/4R3/8/8/PPPPQPPP/RNB1KBN1 b - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let target = 1 << Tables::E8;
+        let expected = 1 << Tables::E7;
+        let mask = board.pin_mask(&tables, target);
+        assert_eq!(mask, expected);
+    }
+
+    #[test]
+    fn test_pin_mask_3() {
+        let board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pp1ppppp/2p5/q7/8/2NP4/PPP1PPPP/R1BQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let target = 1 << Tables::E1;
+        let expected = 1 << Tables::C3;
+        let mask = board.pin_mask(&tables, target);
+        assert_eq!(mask, expected);
+    }
+
+    #[test]
+    fn test_pin_mask_4() {
+        let board = BoardState::state_from_string_fen(
+            "1nb1kbnr/pp1ppppp/2p1r3/q7/8/2NP4/PPP1PPPP/R1BQKBNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let target = 1 << Tables::E1;
+        let expected = (1 << Tables::C3) | (1 << Tables::E2);
+        let mask = board.pin_mask(&tables, target);
+        assert_eq!(mask, expected);
+    }
+
+    #[test]
+    fn test_pin_safe_1() {
+        let board = BoardState::state_from_string_fen(
+            "1nb1kbnr/pp1ppppp/2p1r3/q7/8/2NP4/PPP1PPPP/R1BQKBNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::E1;
+        let mv = MoveRep::new(
+            1 << Tables::G1,
+            1 << Tables::H3,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let result = board.pin_safe(&tables, target, &mv);
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_pin_safe_2() {
+        let board = BoardState::state_from_string_fen(
+            "1nb1kbnr/pp1ppppp/2p1r3/q7/8/2NP4/PPP1PPPP/R1BQKBNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::E1;
+        let mv = MoveRep::new(
+            1 << Tables::E2,
+            1 << Tables::E3,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = board.pin_safe(&tables, target, &mv);
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_pin_safe_3() {
+        let board = BoardState::state_from_string_fen(
+            "1nb1kbnr/pp1ppppp/2p1r3/q7/8/2NP4/PPP1PPPP/R1BQKBNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::E1;
+        let mv = MoveRep::new(
+            1 << Tables::C3,
+            1 << Tables::E4,
+            None,
+            PieceType::Knight,
+            None,
+        );
+
+        let result = board.pin_safe(&tables, target, &mv);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_pin_safe_4() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/Q7/8/PP1PPPPP/RNB1KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::E8;
+        let mv = MoveRep::new(
+            1 << Tables::D7,
+            1 << Tables::D5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let result = board.pin_safe(&tables, target, &mv);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_pin_safe_5() {
+        let board = BoardState::state_from_string_fen(
+            "rnbqkbnr/p1p1pppp/8/1p1p4/Q7/P1P5/1P1PPPPP/RNB1KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let target = 1 << Tables::E8;
+        let mv = MoveRep::new(
+            1 << Tables::B5,
+            1 << Tables::A4,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Queen),
+        );
+
+        let result = board.pin_safe(&tables, target, &mv);
+        assert_eq!(result, true);
+    }
+
+    // #[test]
+    // fn foo() {
+    //     let board = BoardState::state_from_string_fen(
+    //         "rnbq1bnr/ppppkppp/3P4/4p3/8/8/PPP1PPPP/RNBQKBNR b KQ - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+    //     let results = generate_attacking_moves(&board, &tables, 1 << Tables::D6);
+    //     for mv in results {
+    //         println!("{:?}", mv);
+    //     }
+    //     panic!();
+    // }
 }

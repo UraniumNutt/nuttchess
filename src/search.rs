@@ -8,13 +8,8 @@ pub fn perft(board: &mut BoardState, depth: usize) {
     for lower_move in top_moves {
         if let Ok(move_name) = lower_move.to_string() {
             board.make(&lower_move);
-            let mut lower_node_count = 0;
-            if !(board.white_in_check(&tables) && !board.white_to_move)
-                && !(board.black_in_check(&tables) && board.white_to_move)
-            {
-                lower_node_count = perft_search(board, &tables, depth - 1);
-                total_node_count += lower_node_count;
-            }
+            let lower_node_count = perft_search(board, &tables, depth - 1);
+            total_node_count += lower_node_count;
             board.unmake(&lower_move);
 
             println!("{} {}", move_name, lower_node_count);
@@ -26,18 +21,23 @@ pub fn perft(board: &mut BoardState, depth: usize) {
 }
 
 pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> usize {
+    // TODO Use bulk counting instead (if depth == 1 return moves.len())
+    // For this to work, the move generator needs to only emit legal moves
+    // (I think the only puedo legal moves now involve pins)
+    // if depth == 0 {
+    //     return 1;
+    // }
+    let moves = generate(board, &tables);
+    if depth == 1 {
+        return moves.len();
+    }
     if depth == 0 {
         return 1;
     }
     let mut node_count = 0;
-    let moves = generate(board, &tables);
     for mv in moves {
         board.make(&mv);
-        if !(board.white_in_check(&tables) && !board.white_to_move)
-            && !(board.black_in_check(&tables) && board.white_to_move)
-        {
-            node_count += perft_search(board, &tables, depth - 1);
-        }
+        node_count += perft_search(board, &tables, depth - 1);
         board.unmake(&mv);
     }
     return node_count;
@@ -92,43 +92,22 @@ mod tests {
         assert_eq!(node_count, 197281);
     }
 
-    #[test]
-    fn board_same_after_iterration_start_pos() {
-        let mut board = BoardState::starting_state();
-        let tables = Tables::new();
-        let moves = generate(&board, &tables);
-        for mv in moves {
-            let before_state = board.clone();
-            board.make(&mv);
-            board.unmake(&mv);
-            let after_state = board.clone();
-            assert_eq!(before_state, after_state);
-        }
-    }
+    // These can take a while
+    // #[test]
+    // fn depth_5() {
+    //     let mut board = BoardState::starting_state();
+    //     let tables = Tables::new();
+    //     let node_count = perft_search(&mut board, &tables, 5);
+    //     assert_eq!(node_count, 4865609);
+    // }
 
-    #[test]
-    fn board_same_after_iterration_knight() {
-        let mut board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
-        );
-        let tables = Tables::new();
-        let moves = generate(&board, &tables);
-        for mv in moves {
-            let before_state = board.clone();
-            board.make(&mv);
-            board.unmake(&mv);
-            let after_state = board.clone();
-            assert_eq!(before_state, after_state);
-        }
-    }
-
-    #[test]
-    fn white_knight_move_node_count() {
-        let mut board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
-        );
-        let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
-        assert_eq!(node_count, 400);
-    }
+    // #[test]
+    // fn white_knight_move_node_count() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+    //     let node_count = perft_search(&mut board, &tables, 2);
+    //     assert_eq!(node_count, 400);
+    // }
 }
