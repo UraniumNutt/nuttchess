@@ -62,6 +62,7 @@ pub enum Promotion {
     Bishop,
     Rook,
     Knight,
+    Castle,
 }
 
 // Helps the move maker know what bitboard to manipulate
@@ -382,6 +383,51 @@ impl BoardState {
 
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
+        // If the move is castling, do the move logic here, and return (dont do the normal path)
+        if play.promotion == Some(Promotion::Castle) {
+            self.push_state();
+            match play.ending_square {
+                e if e == 1 << Tables::G1 => {
+                    // White kingside
+                    self.clear(play.starting_square, Some(PieceType::King));
+                    self.clear(1 << Tables::H1, Some(PieceType::Rook));
+                    self.set(play.ending_square, Some(PieceType::King));
+                    self.set(1 << Tables::F1, Some(PieceType::Rook));
+                    self.white_queenside_castle_rights = false;
+                    self.white_kingside_castle_rights = false;
+                }
+                e if e == 1 << Tables::C1 => {
+                    // White queenside
+                    self.clear(play.starting_square, Some(PieceType::King));
+                    self.clear(1 << Tables::A1, Some(PieceType::Rook));
+                    self.set(play.ending_square, Some(PieceType::King));
+                    self.set(1 << Tables::D1, Some(PieceType::Rook));
+                    self.white_queenside_castle_rights = false;
+                    self.white_kingside_castle_rights = false;
+                }
+                e if e == 1 << Tables::G8 => {
+                    // Black kingside
+                    self.clear(play.starting_square, Some(PieceType::King));
+                    self.clear(1 << Tables::H8, Some(PieceType::Rook));
+                    self.set(play.ending_square, Some(PieceType::King));
+                    self.set(1 << Tables::F8, Some(PieceType::Rook));
+                    self.black_queenside_castle_rights = false;
+                    self.black_kingside_castle_rights = false;
+                }
+                e if e == 1 << Tables::C8 => {
+                    // Black queenside
+                    self.clear(play.starting_square, Some(PieceType::King));
+                    self.clear(1 << Tables::A8, Some(PieceType::Rook));
+                    self.set(play.ending_square, Some(PieceType::King));
+                    self.set(1 << Tables::D8, Some(PieceType::Rook));
+                    self.black_queenside_castle_rights = false;
+                    self.black_kingside_castle_rights = false;
+                }
+                _ => return,
+            }
+            self.white_to_move = !self.white_to_move;
+            return;
+        }
         self.clear(play.starting_square, Some(play.moved_type));
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
@@ -396,6 +442,30 @@ impl BoardState {
         self.set(play.ending_square, Some(play.moved_type));
         // Do special logic here
         self.push_state();
+        // If the move is not castling, but can effect castling rights, change the rights here
+        if play.moved_type == PieceType::Rook {
+            if self.white_queenside_castle_rights && play.starting_square == 1 << Tables::A1 {
+                self.white_queenside_castle_rights = false;
+            }
+            if self.white_kingside_castle_rights && play.starting_square == 1 << Tables::H1 {
+                self.white_kingside_castle_rights = false;
+            }
+            if self.black_queenside_castle_rights && play.starting_square == 1 << Tables::A8 {
+                self.black_queenside_castle_rights = false;
+            }
+            if self.black_kingside_castle_rights && play.starting_square == 1 << Tables::H8 {
+                self.black_kingside_castle_rights = false;
+            }
+        }
+        if play.moved_type == PieceType::King && play.promotion == None {
+            if self.white_to_move {
+                self.white_queenside_castle_rights = false;
+                self.white_kingside_castle_rights = false;
+            } else {
+                self.black_queenside_castle_rights = false;
+                self.black_kingside_castle_rights = false;
+            }
+        }
         // Set en passant target
         if play.moved_type == PieceType::Pawn
             && (play.starting_square & Tables::RANK_2 != 0
@@ -416,6 +486,51 @@ impl BoardState {
     // Reverts the move from the board. Pops from the move stack
     pub fn unmake(&mut self, play: &MoveRep) {
         self.pop_state();
+        // If the move to unmake is castling do this and return
+        if play.promotion == Some(Promotion::Castle) {
+            // Swap side to play first
+            self.white_to_move = !self.white_to_move;
+            match play.ending_square {
+                e if e == 1 << Tables::G1 => {
+                    // White kingside
+                    self.set(play.starting_square, Some(PieceType::King));
+                    self.set(1 << Tables::H1, Some(PieceType::Rook));
+                    self.clear(play.ending_square, Some(PieceType::King));
+                    self.clear(1 << Tables::F1, Some(PieceType::Rook));
+                    self.white_queenside_castle_rights = true;
+                    self.white_kingside_castle_rights = true;
+                }
+                e if e == 1 << Tables::C1 => {
+                    // White queenside
+                    self.set(play.starting_square, Some(PieceType::King));
+                    self.set(1 << Tables::A1, Some(PieceType::Rook));
+                    self.clear(play.ending_square, Some(PieceType::King));
+                    self.clear(1 << Tables::D1, Some(PieceType::Rook));
+                    self.white_queenside_castle_rights = true;
+                    self.white_kingside_castle_rights = true;
+                }
+                e if e == 1 << Tables::G8 => {
+                    // Black kingside
+                    self.set(play.starting_square, Some(PieceType::King));
+                    self.set(1 << Tables::H8, Some(PieceType::Rook));
+                    self.clear(play.ending_square, Some(PieceType::King));
+                    self.clear(1 << Tables::F8, Some(PieceType::Rook));
+                    self.black_queenside_castle_rights = true;
+                    self.black_kingside_castle_rights = true;
+                }
+                e if e == 1 << Tables::C8 => {
+                    // Black queenside
+                    self.set(play.starting_square, Some(PieceType::King));
+                    self.set(1 << Tables::A8, Some(PieceType::Rook));
+                    self.clear(play.ending_square, Some(PieceType::King));
+                    self.clear(1 << Tables::D8, Some(PieceType::Rook));
+                    self.black_queenside_castle_rights = true;
+                    self.black_kingside_castle_rights = true;
+                }
+                _ => return,
+            }
+            return;
+        }
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
             // Remember, we have not switch the side to move back yet
@@ -939,10 +1054,12 @@ impl BoardState {
             blocking_mask |= target >> 8 & self.white_pawns;
         }
         // Double push
-        if target >> 16 & self.white_pawns != 0 && target >> 8 & self.occupancy() == 0 {
+        if target >> 16 & self.white_pawns != 0
+            && target >> 8 & self.occupancy() == 0
+            && target >> 16 & Tables::RANK_2 != 0
+        {
             blocking_mask |= target >> 16 & self.white_pawns;
         }
-        // blocking_mask |= tables.black_pawn_push[piece_index] & self.white_pawns;
         // Check blocking knights
         blocking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
         // Check blocking rooks
@@ -995,13 +1112,15 @@ impl BoardState {
 
         // Check blocking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
-        // blocking_mask |= tables.white_pawn_push[piece_index] & self.black_pawns;
         // Single push
         if target << 8 & self.black_pawns != 0 {
             blocking_mask |= target << 8 & self.black_pawns;
         }
         // Double push
-        if target << 16 & self.black_pawns != 0 && target << 8 & self.occupancy() == 0 {
+        if target << 16 & self.black_pawns != 0
+            && target << 8 & self.occupancy() == 0
+            && target << 16 & Tables::RANK_7 != 0
+        {
             blocking_mask |= target << 16 & self.black_pawns;
         }
         // Check blocking knights
@@ -2699,16 +2818,218 @@ mod tests {
         assert_eq!(result, true);
     }
 
-    // #[test]
-    // fn foo() {
-    //     let board = BoardState::state_from_string_fen(
-    //         "rnbq1bnr/ppppkppp/3P4/4p3/8/8/PPP1PPPP/RNBQKBNR b KQ - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
-    //     let results = generate_attacking_moves(&board, &tables, 1 << Tables::D6);
-    //     for mv in results {
-    //         println!("{:?}", mv);
-    //     }
-    //     panic!();
-    // }
+    #[test]
+    fn test_white_kingside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/Q7/3BPN2/PP1P1PPP/RNB1K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let mv = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::G1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        board.make(&mv);
+        assert_eq!(board.white_king, 1 << Tables::G1);
+        assert_eq!(board.white_rooks & 1 << Tables::F1, 1 << Tables::F1);
+        assert_eq!(board.white_kingside_castle_rights, false);
+        assert_eq!(board.white_queenside_castle_rights, false);
+
+        board.unmake(&mv);
+        assert_eq!(board.white_king, 1 << Tables::E1);
+        assert_eq!(board.white_rooks & 1 << Tables::H1, 1 << Tables::H1);
+        assert_eq!(board.white_kingside_castle_rights, true);
+        assert_eq!(board.white_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_white_queenside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/3P4/2NQB3/PPP1PPPP/R3KBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let mv = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::C1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        board.make(&mv);
+        assert_eq!(board.white_king, 1 << Tables::C1);
+        assert_eq!(board.white_rooks & 1 << Tables::D1, 1 << Tables::D1);
+        assert_eq!(board.white_kingside_castle_rights, false);
+        assert_eq!(board.white_queenside_castle_rights, false);
+
+        board.unmake(&mv);
+        assert_eq!(board.white_king, 1 << Tables::E1);
+        assert_eq!(board.white_rooks & 1 << Tables::A1, 1 << Tables::A1);
+        assert_eq!(board.white_kingside_castle_rights, true);
+        assert_eq!(board.white_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_black_kingside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqk2r/pppppp1p/5n1b/6p1/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let mv = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::G8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        board.make(&mv);
+        assert_eq!(board.black_king, 1 << Tables::G8);
+        assert_eq!(board.black_rooks & 1 << Tables::F8, 1 << Tables::F8);
+        assert_eq!(board.black_kingside_castle_rights, false);
+        assert_eq!(board.black_queenside_castle_rights, false);
+
+        board.unmake(&mv);
+        assert_eq!(board.black_king, 1 << Tables::E8);
+        assert_eq!(board.black_rooks & 1 << Tables::H8, 1 << Tables::H8);
+        assert_eq!(board.black_kingside_castle_rights, true);
+        assert_eq!(board.black_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_black_queenside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/ppp1pppp/2nqb3/3p4/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let mv = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::C8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        board.make(&mv);
+        assert_eq!(board.black_king, 1 << Tables::C8);
+        assert_eq!(board.black_rooks & 1 << Tables::D8, 1 << Tables::D8);
+        assert_eq!(board.black_kingside_castle_rights, false);
+        assert_eq!(board.black_queenside_castle_rights, false);
+
+        board.unmake(&mv);
+        assert_eq!(board.black_king, 1 << Tables::E8);
+        assert_eq!(board.black_rooks & 1 << Tables::A8, 1 << Tables::A8);
+        assert_eq!(board.black_kingside_castle_rights, true);
+        assert_eq!(board.black_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_white_remove_kingside_castle_rights() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let kingside_rook_move = MoveRep::new(
+            1 << Tables::H1,
+            1 << Tables::H2,
+            None,
+            PieceType::Rook,
+            None,
+        );
+
+        board.make(&kingside_rook_move);
+        assert_eq!(board.white_kingside_castle_rights, false);
+        assert_eq!(board.white_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_white_remove_queenside_castle_right() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/P6P/8/1PPPPPP1/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let queenside_rook_move = MoveRep::new(
+            1 << Tables::A1,
+            1 << Tables::A2,
+            None,
+            PieceType::Rook,
+            None,
+        );
+
+        board.make(&queenside_rook_move);
+        assert_eq!(board.white_kingside_castle_rights, true);
+        assert_eq!(board.white_queenside_castle_rights, false);
+    }
+    #[test]
+    fn test_white_remove_all_castle_rights() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/P3P2P/8/1PPP1PP1/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let king_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::E2,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        board.make(&king_move);
+        assert_eq!(board.white_kingside_castle_rights, false);
+        assert_eq!(board.white_queenside_castle_rights, false);
+    }
+    #[test]
+    fn test_black_remove_kingside_castle_rights() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/ppppppp1/8/7p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let kingside_rook_move = MoveRep::new(
+            1 << Tables::H8,
+            1 << Tables::H7,
+            None,
+            PieceType::Rook,
+            None,
+        );
+
+        board.make(&kingside_rook_move);
+        assert_eq!(board.black_kingside_castle_rights, false);
+        assert_eq!(board.black_queenside_castle_rights, true);
+    }
+    #[test]
+    fn test_black_remove_queenside_castle_right() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1pppppp1/8/p6p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let queenside_rook_move = MoveRep::new(
+            1 << Tables::A8,
+            1 << Tables::A7,
+            None,
+            PieceType::Rook,
+            None,
+        );
+
+        board.make(&queenside_rook_move);
+        assert_eq!(board.black_kingside_castle_rights, true);
+        assert_eq!(board.black_queenside_castle_rights, false);
+    }
+    #[test]
+    fn test_black_remove_all_castle_rights() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1pppppp1/8/p6p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let king_move = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::E7,
+            None,
+            PieceType::King,
+            None,
+        );
+
+        board.make(&king_move);
+        assert_eq!(board.black_kingside_castle_rights, false);
+        assert_eq!(board.black_queenside_castle_rights, false);
+    }
 }

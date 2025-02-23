@@ -21,12 +21,6 @@ pub fn perft(board: &mut BoardState, depth: usize) {
 }
 
 pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> usize {
-    // TODO Use bulk counting instead (if depth == 1 return moves.len())
-    // For this to work, the move generator needs to only emit legal moves
-    // (I think the only puedo legal moves now involve pins)
-    // if depth == 0 {
-    //     return 1;
-    // }
     let moves = generate(board, &tables);
     if depth == 1 {
         return moves.len();
@@ -92,7 +86,7 @@ mod tests {
         assert_eq!(node_count, 197281);
     }
 
-    // These can take a while
+    // This can take a moment
     // #[test]
     // fn depth_5() {
     //     let mut board = BoardState::starting_state();
@@ -101,13 +95,42 @@ mod tests {
     //     assert_eq!(node_count, 4865609);
     // }
 
+    #[test]
+    fn kiwipete_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 1);
+        assert_eq!(node_count, 48);
+    }
+
     // #[test]
-    // fn white_knight_move_node_count() {
+    // fn kiwipete_2() {
     //     let mut board = BoardState::state_from_string_fen(
-    //         "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 0 1".to_string(),
+    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
     //     );
     //     let tables = Tables::new();
     //     let node_count = perft_search(&mut board, &tables, 2);
-    //     assert_eq!(node_count, 400);
+    //     assert_eq!(node_count, 2039);
+    // }
+
+    // #[test]
+    // fn kiwipete_3() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+    //     let node_count = perft_search(&mut board, &tables, 3);
+    //     assert_eq!(node_count, 97862);
+    // }
+
+    // These can take a while
+    // #[test]
+    // fn depth_6() {
+    //     let mut board = BoardState::starting_state();
+    //     let tables = Tables::new();
+    //     let node_count = perft_search(&mut board, &tables, 6);
+    //     assert_eq!(node_count, 119_060_324);
     // }
 }
