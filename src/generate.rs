@@ -362,18 +362,22 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
             attacked_type: target_piece_type,
         };
         if mv.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &mv) {
-            if mv.moved_type == PieceType::King {
-                let king_safety_mask = match board.white_to_move {
-                    true => board.black_attack_mask_with_transparency(&tables, mv.ending_square),
-                    false => board.white_attack_mask_with_transparency(&tables, mv.ending_square),
-                };
-
-                if mv.ending_square & king_safety_mask == 0 {
-                    moves.push(mv);
-                }
-            } else {
+            // To prevent move duplication, dont produce king attacks here; that will be done the move_king_to_safety
+            if mv.moved_type != PieceType::King {
                 moves.push(mv);
             }
+            // if mv.moved_type == PieceType::King {
+            //     let king_safety_mask = match board.white_to_move {
+            //         true => board.black_attack_mask_with_transparency(&tables, mv.ending_square),
+            //         false => board.white_attack_mask_with_transparency(&tables, mv.ending_square),
+            //     };
+
+            //     if mv.ending_square & king_safety_mask == 0 {
+            //         moves.push(mv);
+            //     }
+            // } else {
+            //     moves.push(mv);
+            // }
         }
     }
 
@@ -504,7 +508,7 @@ pub fn generate_blocking_moves(
     moves
 }
 
-// Generate moves which move the king to safety
+// Generate moves which move the king to safety; also includes moves which attack an adjacent target
 pub fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
     let mut moves = vec![];
 
@@ -519,12 +523,12 @@ pub fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> 
         true => {
             tables.king_attacks[king_index as usize]
                 & !board.black_attack_mask_with_transparency(tables, king)
-                & !board.occupancy()
+                & !board.white_occupancy()
         }
         false => {
             tables.king_attacks[king_index as usize]
                 & !board.white_attack_mask_with_transparency(tables, king)
-                & !board.occupancy()
+                & !board.black_occupancy()
         }
     };
     while safe_squares != 0 {
@@ -1523,6 +1527,9 @@ mod tests {
             None,
         );
         let results = move_king_to_safety(&board, &tables);
+        for mv in &results {
+            println!("{:?}", mv);
+        }
         assert_eq!(results.len(), 1);
         assert!(results.contains(&expected_move));
     }
@@ -1539,6 +1546,50 @@ mod tests {
             println!("{:?}", mv);
         }
         assert_eq!(results.len(), 5);
+    }
+
+    #[test]
+    fn test_king_in_check_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "rn1qkbnr/2pppppp/bp6/p7/8/1P2P3/P1PPKPPP/RNBQ1BNR w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_move = MoveRep::new(
+            1 << Tables::B3,
+            1 << Tables::B5,
+            None,
+            PieceType::Pawn,
+            None,
+        );
+
+        let results = generate(&board, &tables);
+        // for mv in &results {
+        //     println!("{:?}", mv);
+        // }
+        assert_eq!(!results.contains(&unexpected_move), true);
+        // panic!();
+    }
+
+    #[test]
+    fn test_king_in_check_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnb1kbnr/pp1ppppp/8/q7/2p5/2KP4/PPP1PPPP/RNBQ1BNR w kq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move = MoveRep::new(
+            1 << Tables::C3,
+            1 << Tables::C4,
+            None,
+            PieceType::King,
+            Some(PieceType::Pawn),
+        );
+        let moves = generate(&board, &tables);
+        for mv in &moves {
+            println!("{:?}", mv);
+        }
+        assert!(moves.contains(&expected_move));
     }
 
     #[test]

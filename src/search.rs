@@ -95,15 +95,15 @@ mod tests {
     //     assert_eq!(node_count, 4865609);
     // }
 
-    // #[test]
-    // fn kiwipete_1() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
-    //     let node_count = perft_search(&mut board, &tables, 1);
-    //     assert_eq!(node_count, 48);
-    // }
+    #[test]
+    fn kiwipete_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 1);
+        assert_eq!(node_count, 48);
+    }
 
     // #[test]
     // fn kiwipete_2() {
