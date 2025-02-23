@@ -109,6 +109,40 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     &mut moves,
                 );
             }
+
+            // White castle
+            if board.white_queenside_castle_rights || board.white_kingside_castle_rights {
+                if board.white_queenside_castle_rights
+                    && board.black_attacking(&tables, board.white_king) == 0
+                    && board.black_attacking(&tables, board.white_king << 1) == 0
+                    && board.black_attacking(&tables, board.white_king << 2) == 0
+                    && board.occupancy() & 0x70 == 0
+                {
+                    let mv = MoveRep::new(
+                        1 << Tables::E1,
+                        1 << Tables::C1,
+                        Some(Promotion::Castle),
+                        PieceType::King,
+                        None,
+                    );
+                    moves.push(mv);
+                }
+                if board.white_kingside_castle_rights
+                    && board.black_attacking(&tables, board.white_king) == 0
+                    && board.black_attacking(&tables, board.white_king >> 1) == 0
+                    && board.black_attacking(&tables, board.white_king >> 2) == 0
+                    && board.occupancy() & 0x6 == 0
+                {
+                    let mv = MoveRep::new(
+                        1 << Tables::E1,
+                        1 << Tables::G1,
+                        Some(Promotion::Castle),
+                        PieceType::King,
+                        None,
+                    );
+                    moves.push(mv);
+                }
+            }
         }
         // If the king is in check
         else {
@@ -223,6 +257,40 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     king,
                     &mut moves,
                 );
+            }
+
+            // Black castling
+            if board.black_queenside_castle_rights || board.black_kingside_castle_rights {
+                if board.black_queenside_castle_rights
+                    && board.white_attacking(&tables, board.black_king) == 0
+                    && board.white_attacking(&tables, board.black_king << 1) == 0
+                    && board.white_attacking(&tables, board.black_king << 2) == 0
+                    && board.occupancy() & 0x6000000000000000 == 0
+                {
+                    let mv = MoveRep::new(
+                        1 << Tables::E8,
+                        1 << Tables::C8,
+                        Some(Promotion::Castle),
+                        PieceType::King,
+                        None,
+                    );
+                    moves.push(mv);
+                }
+                if board.black_kingside_castle_rights
+                    && board.white_attacking(&tables, board.black_king) == 0
+                    && board.white_attacking(&tables, board.black_king >> 1) == 0
+                    && board.white_attacking(&tables, board.black_king >> 2) == 0
+                    && board.occupancy() & 0x600000000000000 == 0
+                {
+                    let mv = MoveRep::new(
+                        1 << Tables::E8,
+                        1 << Tables::G8,
+                        Some(Promotion::Castle),
+                        PieceType::King,
+                        None,
+                    );
+                    moves.push(mv);
+                }
             }
         }
         // If the king is in check
@@ -359,12 +427,6 @@ pub fn generate_target_blocking(
             moved_type: piece_type.unwrap(),
             attacked_type: target_piece_type,
         };
-        // moves.push(mv);
-        // TODO Figure out a better way to do this. Why does this not work in the function?
-        // let mut mutable_copy = board.clone();
-        // if mutable_copy.move_safe_for_king(&tables, &mv) {
-        //     moves.push(mv);
-        // }
         if pinned_pieces & mv.starting_square == 0 || board.pin_safe(&tables, king, &mv) {
             moves.push(mv);
         }
@@ -1499,31 +1561,150 @@ mod tests {
         assert!(results.contains(&expected_move));
     }
 
-    // #[test]
-    // fn test_no_redundant_moves() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "rnbq1bnr/ppppkppp/4pB2/8/8/1P6/P1PPPPPP/RN1QKBNR b - - 0 1".to_string(),
-    //     );
+    #[test]
+    fn test_white_kingside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppp2pp/4pp2/p7/2B5/4P3/PPPPNPPP/RNBQK2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
 
-    //     let tables = Tables::new();
-    //     let attacking_target = 1 << Tables::F6;
-    //     let protect_target = 1 << Tables::E7;
-    //     let group_1 = &mut generate_attacking_moves(&board, &tables, attacking_target);
-    //     let group_2 =
-    //         &mut generate_blocking_moves(&board, &tables, protect_target, attacking_target);
-    //     let group_3 = &mut move_king_to_safety(&board, &tables);
-    //     println!("Group 1");
-    //     for mv in group_1 {
-    //         println!("{:?}", mv);
-    //     }
-    //     println!("Group 2");
-    //     for mv in group_2 {
-    //         println!("{:?}", mv);
-    //     }
-    //     println!("Group 3");
-    //     for mv in group_3 {
-    //         println!("{:?}", mv);
-    //     }
-    //     panic!();
-    // }
+        let expected_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::G1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let moves = generate(&board, &tables);
+        assert!(moves.contains(&expected_move));
+    }
+
+    #[test]
+    fn test_white_queenside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkbnr/1ppp2pp/4pp2/p7/8/BPNP4/P1PQPPPP/R3KBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::C1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let moves = generate(&board, &tables);
+        assert!(moves.contains(&expected_move));
+    }
+
+    #[test]
+    fn test_black_kingside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqk2r/1ppp2pp/3bpp1n/p7/8/BPNP4/P1PQPPPP/R3KBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::G8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let moves = generate(&board, &tables);
+        assert!(moves.contains(&expected_move));
+    }
+
+    #[test]
+    fn test_black_queenside_castle() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/pppqpppp/2npb3/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let expected_move = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::C8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let moves = generate(&board, &tables);
+        assert!(moves.contains(&expected_move));
+    }
+
+    #[test]
+    fn test_castle_blocked_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/pp1qpppp/1Bnpb3/2p5/8/8/PPPPPPPP/RN1QKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_move = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::C8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+
+        let moves = generate(&board, &tables);
+        assert_eq!(!moves.contains(&unexpected_move), true);
+    }
+
+    #[test]
+    fn test_castle_blocked_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/pp1Bpppp/2npb3/2pq4/8/8/PPPPPPPP/RN1QKBNR b KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let unexpected_move = MoveRep::new(
+            1 << Tables::E8,
+            1 << Tables::C8,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+
+        let moves = generate(&board, &tables);
+        assert_eq!(!moves.contains(&unexpected_move), true);
+    }
+
+    #[test]
+    fn test_castle_blocked_3() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/pp2pppp/2npb3/2pq4/8/8/PPPPPPPP/RN1QKBNR w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::C1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+
+        let moves = generate(&board, &tables);
+        assert_eq!(!moves.contains(&unexpected_move), true);
+    }
+
+    #[test]
+    fn test_castle_blocked_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3kbnr/pp2pppp/2npb3/2p5/3q1BP1/5PN1/PPPPP2P/RN1QK2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_move = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::G1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+
+        let moves = generate(&board, &tables);
+        assert_eq!(!moves.contains(&unexpected_move), true);
+    }
 }

@@ -62,6 +62,7 @@ pub enum Promotion {
     Bishop,
     Rook,
     Knight,
+    Castle,
 }
 
 // Helps the move maker know what bitboard to manipulate
