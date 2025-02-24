@@ -7,8 +7,8 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
 
     // Get the pinned pieces
     let pinned_pieces = match board.white_to_move {
-        true => board.pin_mask(&tables, board.white_king),
-        false => board.pin_mask(&tables, board.black_king),
+        true => board.pin_mask(&tables, board.white_king, board.white_to_move),
+        false => board.pin_mask(&tables, board.black_king, board.white_to_move),
     };
     // Get the sides to moves king
     let king = match board.white_to_move {
@@ -159,6 +159,26 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
             {
                 let target = board.black_attacking(&tables, board.white_king);
                 moves.append(&mut generate_attacking_moves(&board, tables, target as u64));
+                // Also try to generate en passant moves which attack the target
+
+                if board.en_passant_target >> 8 == target {
+                    let en_passant_index = board.en_passant_target.trailing_zeros() as usize;
+                    let mut attacking_mask =
+                        tables.black_pawn_attacks[en_passant_index] & board.white_pawns;
+                    while attacking_mask != 0 {
+                        let attacking_index = pop_lsb(&mut attacking_mask);
+                        let mv = MoveRep::new(
+                            1 << attacking_index,
+                            board.en_passant_target,
+                            None,
+                            PieceType::Pawn,
+                            Some(PieceType::Pawn),
+                        );
+                        if board.pin_safe(&tables, board.white_king, &mv) {
+                            moves.push(mv);
+                        }
+                    }
+                }
                 moves.append(&mut generate_blocking_moves(
                     board,
                     tables,
@@ -265,7 +285,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     && board.white_attacking(&tables, board.black_king) == 0
                     && board.white_attacking(&tables, board.black_king << 1) == 0
                     && board.white_attacking(&tables, board.black_king << 2) == 0
-                    && board.occupancy() & 0x6000000000000000 == 0
+                    && board.occupancy() & 0x7000000000000000 == 0
                 {
                     let mv = MoveRep::new(
                         1 << Tables::E8,
@@ -308,6 +328,26 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
             {
                 let target = board.white_attacking(tables, board.black_king);
                 moves.append(&mut generate_attacking_moves(&board, tables, target as u64));
+                // Also try to generate en passant moves which attack the target
+
+                if board.en_passant_target << 8 == target {
+                    let en_passant_index = board.en_passant_target.trailing_zeros() as usize;
+                    let mut attacking_mask =
+                        tables.white_pawn_attacks[en_passant_index] & board.black_pawns;
+                    while attacking_mask != 0 {
+                        let attacking_index = pop_lsb(&mut attacking_mask);
+                        let mv = MoveRep::new(
+                            1 << attacking_index,
+                            board.en_passant_target,
+                            None,
+                            PieceType::Pawn,
+                            Some(PieceType::Pawn),
+                        );
+                        if board.pin_safe(&tables, board.black_king, &mv) {
+                            moves.push(mv);
+                        }
+                    }
+                }
                 moves.append(&mut generate_blocking_moves(
                     board,
                     tables,
@@ -328,8 +368,8 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
     let mut moves = vec![];
     // Get the pinned pieces
     let pinned_pieces = match board.white_to_move {
-        true => board.pin_mask(&tables, board.white_king),
-        false => board.pin_mask(&tables, board.black_king),
+        true => board.pin_mask(&tables, board.white_king, board.white_to_move),
+        false => board.pin_mask(&tables, board.black_king, board.white_to_move),
     };
     // Get the sides to moves king
     let king = match board.white_to_move {
@@ -354,6 +394,37 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
     while possible_attacks != 0 {
         let start_square = pop_lsb(&mut possible_attacks);
         let piece_type = board.get_piece_type(1 << start_square);
+        // Special logic to handle en passant targets
+        // White en passant attack
+        if board.white_to_move
+            && board.en_passant_target >> 8 & target != 0
+            && board.white_pawns & 1 << start_square != 0
+        {
+            let mv = MoveRep::new(
+                1 << start_square,
+                board.en_passant_target,
+                None,
+                PieceType::Pawn,
+                Some(PieceType::Pawn),
+            );
+            moves.push(mv);
+            continue;
+        }
+        // Black en passant attack
+        if !board.white_to_move
+            && board.en_passant_target << 8 & target != 0
+            && board.black_pawns & 1 << start_square != 0
+        {
+            let mv = MoveRep::new(
+                1 << start_square,
+                board.en_passant_target,
+                None,
+                PieceType::Pawn,
+                Some(PieceType::Pawn),
+            );
+            moves.push(mv);
+            continue;
+        }
         let mv = MoveRep {
             starting_square: 1 << start_square,
             ending_square: target,
@@ -361,23 +432,46 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
             moved_type: piece_type.unwrap(),
             attacked_type: target_piece_type,
         };
+        // To prevent move duplication, dont produce king attacks here; that will be done in move_king_to_safety
+        if mv.moved_type == PieceType::King {
+            continue;
+        }
         if mv.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &mv) {
-            // To prevent move duplication, dont produce king attacks here; that will be done the move_king_to_safety
-            if mv.moved_type != PieceType::King {
+            if mv.moved_type == PieceType::Pawn {
+                if board.white_to_move && mv.ending_square & Tables::RANK_8 != 0 {
+                    // White promotion
+                    let mut queen_promotion = mv.clone();
+                    queen_promotion.promotion = Some(Promotion::Queen);
+                    let mut rook_promotion = mv.clone();
+                    rook_promotion.promotion = Some(Promotion::Rook);
+                    let mut bishop_promotion = mv.clone();
+                    bishop_promotion.promotion = Some(Promotion::Bishop);
+                    let mut knight_promotion = mv.clone();
+                    knight_promotion.promotion = Some(Promotion::Knight);
+                    moves.push(queen_promotion);
+                    moves.push(rook_promotion);
+                    moves.push(bishop_promotion);
+                    moves.push(knight_promotion);
+                } else if !board.white_to_move && mv.ending_square & Tables::RANK_1 != 0 {
+                    // Black promotion
+                    let mut queen_promotion = mv.clone();
+                    queen_promotion.promotion = Some(Promotion::Queen);
+                    let mut rook_promotion = mv.clone();
+                    rook_promotion.promotion = Some(Promotion::Rook);
+                    let mut bishop_promotion = mv.clone();
+                    bishop_promotion.promotion = Some(Promotion::Bishop);
+                    let mut knight_promotion = mv.clone();
+                    knight_promotion.promotion = Some(Promotion::Knight);
+                    moves.push(queen_promotion);
+                    moves.push(rook_promotion);
+                    moves.push(bishop_promotion);
+                    moves.push(knight_promotion);
+                } else {
+                    moves.push(mv);
+                }
+            } else {
                 moves.push(mv);
             }
-            // if mv.moved_type == PieceType::King {
-            //     let king_safety_mask = match board.white_to_move {
-            //         true => board.black_attack_mask_with_transparency(&tables, mv.ending_square),
-            //         false => board.white_attack_mask_with_transparency(&tables, mv.ending_square),
-            //     };
-
-            //     if mv.ending_square & king_safety_mask == 0 {
-            //         moves.push(mv);
-            //     }
-            // } else {
-            //     moves.push(mv);
-            // }
         }
     }
 
@@ -397,8 +491,8 @@ pub fn generate_target_blocking(
     let target_piece_type = board.get_piece_type(target);
     // Get the pinned pieces
     let pinned_pieces = match board.white_to_move {
-        true => board.pin_mask(&tables, board.white_king),
-        false => board.pin_mask(&tables, board.black_king),
+        true => board.pin_mask(&tables, board.white_king, board.white_to_move),
+        false => board.pin_mask(&tables, board.black_king, board.white_to_move),
     };
     // Get the sides to moves king
     let king = match board.white_to_move {
@@ -576,7 +670,23 @@ fn white_pawn_moves(
                 );
                 if push.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &push)
                 {
-                    moves.push(push);
+                    if end_square & Tables::RANK_8 == 0 {
+                        moves.push(push);
+                    } else {
+                        // Promotion
+                        let mut queen_promotion = push.clone();
+                        queen_promotion.promotion = Some(Promotion::Queen);
+                        let mut rook_promotion = push.clone();
+                        rook_promotion.promotion = Some(Promotion::Rook);
+                        let mut bishop_promotion = push.clone();
+                        bishop_promotion.promotion = Some(Promotion::Bishop);
+                        let mut knight_promotion = push.clone();
+                        knight_promotion.promotion = Some(Promotion::Knight);
+                        moves.push(queen_promotion);
+                        moves.push(rook_promotion);
+                        moves.push(bishop_promotion);
+                        moves.push(knight_promotion);
+                    }
                 }
             }
         }
@@ -598,10 +708,22 @@ fn white_pawn_moves(
             );
             if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
             {
-                if attack.starting_square & pinned_pieces == 0
-                    || board.pin_safe(&tables, king, &attack)
-                {
+                if end_square & Tables::RANK_8 == 0 {
                     moves.push(attack);
+                } else {
+                    // Promotion
+                    let mut queen_promotion = attack.clone();
+                    queen_promotion.promotion = Some(Promotion::Queen);
+                    let mut rook_promotion = attack.clone();
+                    rook_promotion.promotion = Some(Promotion::Rook);
+                    let mut bishop_promotion = attack.clone();
+                    bishop_promotion.promotion = Some(Promotion::Bishop);
+                    let mut knight_promotion = attack.clone();
+                    knight_promotion.promotion = Some(Promotion::Knight);
+                    moves.push(queen_promotion);
+                    moves.push(rook_promotion);
+                    moves.push(bishop_promotion);
+                    moves.push(knight_promotion);
                 }
             }
         }
@@ -625,8 +747,9 @@ fn white_pawn_moves(
                     attacked_type,
                     Some(PieceType::Pawn),
                 );
+                // This uses AND instead of OR to prevent discoverd en passant attacks
                 if attack.starting_square & pinned_pieces == 0
-                    || board.pin_safe(&tables, king, &attack)
+                    && board.pin_safe(&tables, king, &attack)
                 {
                     moves.push(attack);
                 }
@@ -865,7 +988,23 @@ fn black_pawn_moves(
                 );
                 if push.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &push)
                 {
-                    moves.push(push);
+                    if end_square & Tables::RANK_1 == 0 {
+                        moves.push(push);
+                    } else {
+                        // Promotion
+                        let mut queen_promotion = push.clone();
+                        queen_promotion.promotion = Some(Promotion::Queen);
+                        let mut rook_promotion = push.clone();
+                        rook_promotion.promotion = Some(Promotion::Rook);
+                        let mut bishop_promotion = push.clone();
+                        bishop_promotion.promotion = Some(Promotion::Bishop);
+                        let mut knight_promotion = push.clone();
+                        knight_promotion.promotion = Some(Promotion::Knight);
+                        moves.push(queen_promotion);
+                        moves.push(rook_promotion);
+                        moves.push(bishop_promotion);
+                        moves.push(knight_promotion);
+                    }
                 }
             }
         }
@@ -887,7 +1026,23 @@ fn black_pawn_moves(
             );
             if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
             {
-                moves.push(attack);
+                if end_square & Tables::RANK_1 == 0 {
+                    moves.push(attack);
+                } else {
+                    // Promotion
+                    let mut queen_promotion = attack.clone();
+                    queen_promotion.promotion = Some(Promotion::Queen);
+                    let mut rook_promotion = attack.clone();
+                    rook_promotion.promotion = Some(Promotion::Rook);
+                    let mut bishop_promotion = attack.clone();
+                    bishop_promotion.promotion = Some(Promotion::Bishop);
+                    let mut knight_promotion = attack.clone();
+                    knight_promotion.promotion = Some(Promotion::Knight);
+                    moves.push(queen_promotion);
+                    moves.push(rook_promotion);
+                    moves.push(bishop_promotion);
+                    moves.push(knight_promotion);
+                }
             }
         }
     }
@@ -911,8 +1066,9 @@ fn black_pawn_moves(
                     attacked_type,
                     Some(PieceType::Pawn),
                 );
+                // This uses AND instead of OR to prevent discoverd en passant attacks
                 if attack.starting_square & pinned_pieces == 0
-                    || board.pin_safe(&tables, king, &attack)
+                    && board.pin_safe(&tables, king, &attack)
                 {
                     moves.push(attack);
                 }
@@ -1758,4 +1914,40 @@ mod tests {
         let moves = generate(&board, &tables);
         assert_eq!(!moves.contains(&unexpected_move), true);
     }
+
+    #[test]
+    fn test_castle_blocked_5() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q2/PPPBBPpP/1R2K2R w Kkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_mov = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::G1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let results = generate(&board, &tables);
+        print_bitboard(board.white_king >> 1);
+        print_bitboard(board.white_king >> 2);
+        print_bitboard(board.black_attacking(&tables, board.white_king >> 1));
+        print_bitboard(board.black_attacking(&tables, board.white_king >> 2));
+        assert_eq!(!results.contains(&unexpected_mov), true);
+    }
+
+    // #[test]
+    // fn test_white_promotion() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "rnbqkb2/pppppp1P/8/8/8/8/PPPPP1PP/RNBQKBNR w KQq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+
+    //     let moves = generate(&board, &tables);
+    //     for mv in &moves {
+    //         println!("{:?}", mv);
+    //     }
+    //     panic!();
+    // }
 }

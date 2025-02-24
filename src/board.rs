@@ -29,7 +29,7 @@ pub struct BoardState {
     pub move_stack_pointer: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct MoveRep {
     pub starting_square: u64,
     pub ending_square: u64,
@@ -347,10 +347,20 @@ impl BoardState {
         let char2 = play.chars().nth(1).unwrap();
         let char3 = play.chars().nth(2).unwrap();
         let char4 = play.chars().nth(3).unwrap();
+        let char5 = play.chars().nth(4);
 
         let start = position_to_mask(char1, char2).unwrap();
         let end = position_to_mask(char3, char4).unwrap();
-        let move_rep = self.move_rep_from_masks(start, end);
+        let mut move_rep = self.move_rep_from_masks(start, end);
+        if let Some(promotion) = char5 {
+            match promotion {
+                'q' => move_rep.promotion = Some(Promotion::Queen),
+                'r' => move_rep.promotion = Some(Promotion::Rook),
+                'b' => move_rep.promotion = Some(Promotion::Bishop),
+                'n' => move_rep.promotion = Some(Promotion::Knight),
+                _ => {}
+            }
+        }
         self.make(&move_rep);
     }
 
@@ -386,6 +396,7 @@ impl BoardState {
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
+            self.en_passant_target = 0;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
@@ -428,6 +439,7 @@ impl BoardState {
             self.white_to_move = !self.white_to_move;
             return;
         }
+        self.push_state();
         self.clear(play.starting_square, Some(play.moved_type));
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
@@ -438,10 +450,30 @@ impl BoardState {
         } else {
             // Normal attack clear
             self.clear_all(play.ending_square);
+            // If the attacked piece was a rook, remove the relevent castling rights
+            if play.ending_square == 1 << Tables::A1 && self.white_queenside_castle_rights {
+                self.white_queenside_castle_rights = false;
+            } else if play.ending_square == 1 << Tables::H1 && self.white_kingside_castle_rights {
+                self.white_kingside_castle_rights = false;
+            } else if play.ending_square == 1 << Tables::A8 && self.black_queenside_castle_rights {
+                self.black_queenside_castle_rights = false;
+            } else if play.ending_square == 1 << Tables::H8 && self.black_kingside_castle_rights {
+                self.black_kingside_castle_rights = false;
+            }
         }
-        self.set(play.ending_square, Some(play.moved_type));
+        // Promotion logic
+        if let Some(promotion) = play.promotion {
+            match promotion {
+                Promotion::Queen => self.set(play.ending_square, Some(PieceType::Queen)),
+                Promotion::Rook => self.set(play.ending_square, Some(PieceType::Rook)),
+                Promotion::Bishop => self.set(play.ending_square, Some(PieceType::Bishop)),
+                Promotion::Knight => self.set(play.ending_square, Some(PieceType::Knight)),
+                _ => {}
+            }
+        } else {
+            self.set(play.ending_square, Some(play.moved_type));
+        }
         // Do special logic here
-        self.push_state();
         // If the move is not castling, but can effect castling rights, change the rights here
         if play.moved_type == PieceType::Rook {
             if self.white_queenside_castle_rights && play.starting_square == 1 << Tables::A1 {
@@ -543,7 +575,17 @@ impl BoardState {
         }
         // Put this after the first set because we want to replace the opponents piece
         self.white_to_move = !self.white_to_move;
-        self.clear(play.ending_square, Some(play.moved_type));
+        if let Some(promotion) = play.promotion {
+            match promotion {
+                Promotion::Queen => self.clear(play.ending_square, Some(PieceType::Queen)),
+                Promotion::Rook => self.clear(play.ending_square, Some(PieceType::Rook)),
+                Promotion::Bishop => self.clear(play.ending_square, Some(PieceType::Bishop)),
+                Promotion::Knight => self.clear(play.ending_square, Some(PieceType::Knight)),
+                _ => {}
+            }
+        } else {
+            self.clear(play.ending_square, Some(play.moved_type));
+        }
         self.set(play.starting_square, Some(play.moved_type));
     }
 
@@ -1020,9 +1062,16 @@ impl BoardState {
         // turn the piece mask into an index
         let piece_index = target.trailing_zeros() as usize;
 
+        // TODO add en passant attacks
+
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
         attacking_mask |= tables.black_pawn_attacks[piece_index] & self.white_pawns;
+        // Check en passant attacks
+        // if self.en_passant_target >> 8 == target {
+        //     let en_passant_index = self.en_passant_target.trailing_zeros() as usize;
+        //     attacking_mask |= tables.black_pawn_attacks[en_passant_index] & self.white_pawns;
+        // }
         // Check attacking knights
         attacking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
         // Check attacking rooks
@@ -1077,15 +1126,22 @@ impl BoardState {
     }
 
     // Gets the mask of the black pieces that attack the given piece mask
-    pub fn black_attacking(&self, tables: &Tables, piece_mask: u64) -> u64 {
+    pub fn black_attacking(&self, tables: &Tables, target: u64) -> u64 {
         // attacking mask
         let mut attacking_mask = 0;
         // turn the piece mask into an index
-        let piece_index = piece_mask.trailing_zeros() as usize;
+        let piece_index = target.trailing_zeros() as usize;
+
+        // TODO add en passant attacks
 
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
         attacking_mask |= tables.white_pawn_attacks[piece_index] & self.black_pawns;
+        // Check en passant attacks
+        // if self.en_passant_target << 8 == target {
+        //     let en_passant_index = self.en_passant_target.trailing_zeros() as usize;
+        //     attacking_mask |= tables.white_pawn_attacks[en_passant_index] & self.black_pawns;
+        // }
         // Check attacking knights
         attacking_mask |= tables.knight_attacks[piece_index] & self.black_knights;
         // Check attacking rooks
@@ -1140,9 +1196,9 @@ impl BoardState {
     }
 
     /// Gets the mask of the pieces pinned to the target
-    pub fn pin_mask(&self, tables: &Tables, target: u64) -> u64 {
+    pub fn pin_mask(&self, tables: &Tables, target: u64, white_to_move: bool) -> u64 {
         let target_index = target.trailing_zeros() as usize;
-        let mask = match self.white_to_move {
+        let mask = match white_to_move {
             true => {
                 let mut mask = 0;
                 // Project a rook ray without any blockers
@@ -1227,8 +1283,21 @@ impl BoardState {
 
     // Tests if the target is safe from a ray attack after the move rep
     pub fn pin_safe(&self, tables: &Tables, target: u64, mv: &MoveRep) -> bool {
+        // TODO Add special handling for en passant moves, because they can reveal an attack!
         // The occupancy after the move would be made
-        let after_occupancy = self.occupancy() & !mv.starting_square | mv.ending_square;
+        let after_occupancy;
+        // Special en passant logic
+        if mv.ending_square == self.en_passant_target {
+            let en_passant_attacked = match self.white_to_move {
+                true => mv.ending_square >> 8,
+                false => mv.ending_square << 8,
+            };
+            after_occupancy =
+                self.occupancy() & !mv.starting_square & !en_passant_attacked | mv.ending_square;
+        } else {
+            // Normal case
+            after_occupancy = self.occupancy() & !mv.starting_square | mv.ending_square;
+        }
         let target_index = target.trailing_zeros() as usize;
         // A move which attacks the attacker is safe, unless the attackers space is also under attack
 
@@ -1286,6 +1355,15 @@ impl MoveRep {
         let mut mov = String::new();
         mov.push_str(MoveRep::mask_to_string(start).unwrap().as_ref());
         mov.push_str(MoveRep::mask_to_string(end).unwrap().as_ref());
+        if self.promotion.is_some() && self.promotion != Some(Promotion::Castle) {
+            match self.promotion {
+                Some(Promotion::Queen) => mov.push_str("q"),
+                Some(Promotion::Bishop) => mov.push_str("b"),
+                Some(Promotion::Rook) => mov.push_str("r"),
+                Some(Promotion::Knight) => mov.push_str("n"),
+                _ => {}
+            }
+        }
         Ok(mov)
     }
 
@@ -2680,7 +2758,7 @@ mod tests {
 
         let target = 1 << Tables::E1;
         let expected = 1 << Tables::E2;
-        let mask = board.pin_mask(&tables, target);
+        let mask = board.pin_mask(&tables, target, board.white_to_move);
         assert_eq!(mask, expected);
     }
 
@@ -2693,7 +2771,7 @@ mod tests {
 
         let target = 1 << Tables::E8;
         let expected = 1 << Tables::E7;
-        let mask = board.pin_mask(&tables, target);
+        let mask = board.pin_mask(&tables, target, board.white_to_move);
         assert_eq!(mask, expected);
     }
 
@@ -2706,7 +2784,7 @@ mod tests {
 
         let target = 1 << Tables::E1;
         let expected = 1 << Tables::C3;
-        let mask = board.pin_mask(&tables, target);
+        let mask = board.pin_mask(&tables, target, board.white_to_move);
         assert_eq!(mask, expected);
     }
 
@@ -2719,7 +2797,7 @@ mod tests {
 
         let target = 1 << Tables::E1;
         let expected = (1 << Tables::C3) | (1 << Tables::E2);
-        let mask = board.pin_mask(&tables, target);
+        let mask = board.pin_mask(&tables, target, board.white_to_move);
         assert_eq!(mask, expected);
     }
 
@@ -3031,5 +3109,24 @@ mod tests {
         board.make(&king_move);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
+    }
+
+    #[test]
+    fn test_white_promotion() {
+        let mut board = BoardState::state_from_string_fen(
+            "rnbqkb2/pppppp1P/8/8/8/8/PPPPP1PP/RNBQKBNR w KQq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let mv = MoveRep::new(
+            1 << Tables::H7,
+            1 << Tables::H8,
+            Some(Promotion::Queen),
+            PieceType::Pawn,
+            None,
+        );
+        board.make(&mv);
+        assert_eq!(board.white_queens, 1 << Tables::D1 | 1 << Tables::H8);
+        assert_eq!(board.white_pawns & 1 << Tables::H8, 0);
     }
 }
