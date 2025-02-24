@@ -137,6 +137,78 @@ mod tests {
         assert_eq!(node_count, 4085603);
     }
 
+    #[test]
+    fn pos3_1() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 1);
+        assert_eq!(node_count, 14);
+    }
+
+    #[test]
+    fn pos3_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 2);
+        assert_eq!(node_count, 191);
+    }
+
+    #[test]
+    fn pos3_3() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 3);
+        assert_eq!(node_count, 2812);
+    }
+
+    #[test]
+    fn pos3_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 4);
+        assert_eq!(node_count, 43238);
+    }
+
+    #[test]
+    fn pos3_5() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 5);
+        assert_eq!(node_count, 674624);
+    }
+
+    #[test]
+    fn pos3_6() {
+        let mut board = BoardState::state_from_string_fen(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 6);
+        assert_eq!(node_count, 11030083);
+    }
+
+    // This can take a while
+    // #[test]
+    // fn kiwipete_5() {
+    //     let mut board = BoardState::state_from_string_fen(
+    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+    //     );
+    //     let tables = Tables::new();
+    //     let node_count = perft_search(&mut board, &tables, 5);
+
+    //     assert_eq!(node_count, 193690690);
+    // }
+
     // These can take a while
     // #[test]
     // fn depth_6() {
