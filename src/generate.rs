@@ -265,7 +265,7 @@ pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
                     && board.white_attacking(&tables, board.black_king) == 0
                     && board.white_attacking(&tables, board.black_king << 1) == 0
                     && board.white_attacking(&tables, board.black_king << 2) == 0
-                    && board.occupancy() & 0x6000000000000000 == 0
+                    && board.occupancy() & 0x7000000000000000 == 0
                 {
                     let mv = MoveRep::new(
                         1 << Tables::E8,
@@ -598,11 +598,7 @@ fn white_pawn_moves(
             );
             if attack.starting_square & pinned_pieces == 0 || board.pin_safe(&tables, king, &attack)
             {
-                if attack.starting_square & pinned_pieces == 0
-                    || board.pin_safe(&tables, king, &attack)
-                {
-                    moves.push(attack);
-                }
+                moves.push(attack);
             }
         }
     }
@@ -1757,5 +1753,27 @@ mod tests {
 
         let moves = generate(&board, &tables);
         assert_eq!(!moves.contains(&unexpected_move), true);
+    }
+
+    #[test]
+    fn test_castle_blocked_5() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q2/PPPBBPpP/1R2K2R w Kkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+
+        let unexpected_mov = MoveRep::new(
+            1 << Tables::E1,
+            1 << Tables::G1,
+            Some(Promotion::Castle),
+            PieceType::King,
+            None,
+        );
+        let results = generate(&board, &tables);
+        print_bitboard(board.white_king >> 1);
+        print_bitboard(board.white_king >> 2);
+        print_bitboard(board.black_attacking(&tables, board.white_king >> 1));
+        print_bitboard(board.black_attacking(&tables, board.white_king >> 2));
+        assert_eq!(!results.contains(&unexpected_mov), true);
     }
 }

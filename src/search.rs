@@ -105,25 +105,37 @@ mod tests {
         assert_eq!(node_count, 48);
     }
 
-    // #[test]
-    // fn kiwipete_2() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
-    //     let node_count = perft_search(&mut board, &tables, 2);
-    //     assert_eq!(node_count, 2039);
-    // }
+    #[test]
+    fn kiwipete_2() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 2);
+        assert_eq!(node_count, 2039);
+    }
 
-    // #[test]
-    // fn kiwipete_3() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
-    //     let node_count = perft_search(&mut board, &tables, 3);
-    //     assert_eq!(node_count, 97862);
-    // }
+    #[test]
+    fn kiwipete_3() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 3);
+
+        assert_eq!(node_count, 97862);
+    }
+
+    #[test]
+    fn kiwipete_4() {
+        let mut board = BoardState::state_from_string_fen(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
+        );
+        let tables = Tables::new();
+        let node_count = perft_search(&mut board, &tables, 4);
+
+        assert_eq!(node_count, 4085603);
+    }
 
     // These can take a while
     // #[test]

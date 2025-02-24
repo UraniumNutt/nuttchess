@@ -386,6 +386,7 @@ impl BoardState {
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
+            self.en_passant_target = 0;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
@@ -1349,6 +1350,12 @@ impl MoveRep {
         }
 
         Ok(pos)
+    }
+
+    pub fn move_rep_to_string(&self) -> Result<String, String> {
+        let start_square = MoveRep::mask_to_string(self.starting_square)?;
+        let end_square = MoveRep::mask_to_string(self.ending_square)?;
+        return Ok(start_square + &end_square);
     }
 }
 

@@ -339,8 +339,8 @@ impl Tables {
     fn generate_white_pawn_attacks(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
             let mask = 1 << shift_value;
-            // If the pawn is on the first or last ranks dont do anything
-            if mask & Self::RANK_8 != 0 || mask & Self::RANK_1 != 0 {
+            // If the pawn is on the last rank, dont do anything
+            if mask & Self::RANK_8 != 0 {
                 table[shift_value] = 0;
                 continue;
             }
@@ -357,8 +357,8 @@ impl Tables {
     fn generate_black_pawn_attacks(table: &mut [u64; 64]) {
         for shift_value in 0..64 {
             let mask = 1 << shift_value;
-            // If the pawn is on the first or last ranks dont do anything
-            if mask & Self::RANK_8 != 0 || mask & Self::RANK_1 != 0 {
+            // If the pawn is on the first rank, dont do anything
+            if mask & Self::RANK_1 != 0 {
                 table[shift_value] = 0;
                 continue;
             }
