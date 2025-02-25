@@ -331,6 +331,7 @@ impl BoardState {
     }
 
     fn move_rep_from_masks(&self, start: u64, end: u64) -> MoveRep {
+        // TODO This is probably crashing because it cant handle promotion (which include castling!)
         let moved_piece = self.get_piece_type(start);
         let attacked_piece = self.get_piece_type(end);
         MoveRep {
@@ -360,6 +361,26 @@ impl BoardState {
                 'n' => move_rep.promotion = Some(Promotion::Knight),
                 _ => {}
             }
+        }
+        // Handle castling logic
+        match (start, end) {
+            // White kingside
+            e if e == (1 << Tables::E1, 1 << Tables::G1) => {
+                move_rep.promotion = Some(Promotion::Castle)
+            }
+            // White queenside
+            e if e == (1 << Tables::E1, 1 << Tables::C1) => {
+                move_rep.promotion = Some(Promotion::Castle)
+            }
+            // Black kingside
+            e if e == (1 << Tables::E8, 1 << Tables::G8) => {
+                move_rep.promotion = Some(Promotion::Castle)
+            }
+            // Black queenside
+            e if e == (1 << Tables::E8, 1 << Tables::C8) => {
+                move_rep.promotion = Some(Promotion::Castle)
+            }
+            _ => {}
         }
         self.make(&move_rep);
     }
@@ -393,6 +414,11 @@ impl BoardState {
 
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
+        // DEBUG
+        if play.ending_square == self.white_king || play.ending_square == self.black_king {
+            println!("Move attacking king! {}", play.to_string().unwrap());
+            panic!();
+        }
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
@@ -1334,6 +1360,43 @@ impl BoardState {
     pub fn black_in_check(&self, table: &Tables) -> bool {
         let white_attack_mask = self.white_attack_mask(table);
         white_attack_mask & self.black_king != 0
+    }
+
+    // Get if white is in stalemate
+    pub fn white_in_stalemate(&self, table: &Tables) -> bool {
+        let black_attack_mask = self.black_attack_mask(table);
+        let king_attack = table.king_attacks[self.white_king.trailing_zeros() as usize];
+        king_attack & black_attack_mask == king_attack && !self.white_in_check(&table)
+    }
+
+    // Get if black is in stalemate
+    pub fn black_in_stalemate(&self, table: &Tables) -> bool {
+        let white_attack_mask = self.white_attack_mask(table);
+        let king_attack = table.king_attacks[self.black_king.trailing_zeros() as usize];
+        king_attack & white_attack_mask == king_attack && !self.black_in_check(&table)
+    }
+
+    // Get if white is in checkmate
+    pub fn white_in_checkmate(&self, table: &Tables) -> bool {
+        // FIXME this is very expensive!
+        let moves = generate(self, table);
+        moves.len() == 0
+    }
+
+    // Get if black is in checkmate
+    pub fn black_in_checkmate(&self, table: &Tables) -> bool {
+        // FIXME this is very expensive!
+        let moves = generate(self, table);
+        moves.len() == 0
+    }
+
+    // Get if the game is over ie any stale mate, or the number of moves is zero
+    pub fn is_over(&self, table: &Tables, number_of_moves: usize) -> bool {
+        self.white_in_stalemate(&table)
+            || self.black_in_stalemate(&table)
+            || number_of_moves == 0
+            || self.white_in_checkmate(table)
+            || self.black_in_checkmate(table)
     }
 
     // Checks that the move will not result in check
@@ -3128,5 +3191,45 @@ mod tests {
         board.make(&mv);
         assert_eq!(board.white_queens, 1 << Tables::D1 | 1 << Tables::H8);
         assert_eq!(board.white_pawns & 1 << Tables::H8, 0);
+    }
+
+    #[test]
+    fn test_white_stalemate_1() {
+        let board =
+            BoardState::state_from_string_fen("8/8/5k2/8/4q3/2K5/4q3/1r1r4 w - - 0 1".to_string());
+        let tables = Tables::new();
+
+        let stalemate = board.white_in_stalemate(&tables);
+        assert_eq!(stalemate, true);
+    }
+
+    #[test]
+    fn test_white_stalemate_2() {
+        let board =
+            BoardState::state_from_string_fen("8/8/5k2/8/8/2K5/4r3/1r1r4 w - - 0 1".to_string());
+        let tables = Tables::new();
+
+        let stalemate = board.white_in_stalemate(&tables);
+        assert_eq!(stalemate, false);
+    }
+
+    #[test]
+    fn test_black_stalemate_1() {
+        let board =
+            BoardState::state_from_string_fen("8/6K1/8/8/4Q3/2k5/4R3/1R1R4 b - - 0 1".to_string());
+        let tables = Tables::new();
+
+        let stalemate = board.black_in_stalemate(&tables);
+        assert_eq!(stalemate, true);
+    }
+
+    #[test]
+    fn test_black_stalemate_2() {
+        let board =
+            BoardState::state_from_string_fen("8/6K1/8/8/8/2k5/4R3/1R1R4 b - - 0 1".to_string());
+        let tables = Tables::new();
+
+        let stalemate = board.black_in_stalemate(&tables);
+        assert_eq!(stalemate, false);
     }
 }
