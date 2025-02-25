@@ -6,6 +6,8 @@ mod search;
 pub mod tables;
 use crate::board::*;
 use crate::comm::*;
+use crate::tables::*;
+use search::negamax;
 use search::perft;
 use std::env;
 use std::path::Path;
@@ -15,9 +17,10 @@ fn main() {
     let log_file = Path::new("log.txt");
     let mut comm = Comm::create(log_file).unwrap();
 
+    let mut board = BoardState::starting_state();
+    let tables = Tables::new();
     while running {
         let line = comm.engine_in();
-        let mut board = BoardState::starting_state();
         let mut tokens = line.split(" ");
         match tokens.next().unwrap() {
             "uci" => {
@@ -78,6 +81,15 @@ fn main() {
                             comm.engine_out(format!("Expected depth after token perft"));
                         }
                     }
+                }
+                // TODO implement more / the proper searches
+                "wtime" => {
+                    // Just discard these for now
+                    let _ = tokens.next();
+                    let _ = tokens.next();
+                    let _ = tokens.next();
+                    let best_move = negamax(&mut board, &tables, 5).unwrap();
+                    comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
                 _ => {}
             },

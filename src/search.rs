@@ -1,4 +1,7 @@
+use std::isize;
+
 use crate::board::*;
+use crate::eval::*;
 use crate::generate::*;
 use crate::tables::*;
 pub fn perft(board: &mut BoardState, depth: usize) {
@@ -35,6 +38,107 @@ pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> us
         board.unmake(&mv);
     }
     return node_count;
+}
+
+// Prototype search
+pub fn negamax(board: &mut BoardState, tables: &Tables, depth: usize) -> Result<MoveRep, String> {
+    let mut max = isize::MIN;
+    // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
+    let moves = generate(board, tables);
+
+    let mut best_move = moves[0];
+    for mv in &moves {
+        // println!("\nStarting search for move {}", mv.to_string().unwrap());
+        board.make(&mv);
+        let score = negamax_child(
+            board,
+            tables,
+            isize::MIN,
+            isize::MAX,
+            moves.len(),
+            depth - 1,
+        )
+        .saturating_neg();
+        // println!(
+        //     "Completed search for move {}, with a score of {}",
+        //     mv.to_string().unwrap(),
+        //     score
+        // );
+        board.unmake(&mv);
+        if score > max {
+            // println!(
+            //     "The move set a new max! The previous max was {}, and the new one is {}",
+            //     max, score
+            // );
+            max = score;
+            best_move = *mv;
+        }
+    }
+    return Ok(best_move);
+}
+
+fn negamax_child(
+    board: &mut BoardState,
+    tables: &Tables,
+    mut alpha: isize,
+    mut beta: isize,
+    number_of_moves: usize,
+    depth: usize,
+) -> isize {
+    let moves = generate(board, tables);
+    if moves.len() == 0 {
+        // println!("Zeros moves generated at a depth of {}", depth);
+        // print_bitboard(board.occupancy());
+        match board.white_to_move {
+            true => {
+                let black_attack_mask = board.black_attack_mask(&tables);
+                if black_attack_mask & board.white_king == 0 {
+                    // println!("Returning a draw with white to move");
+                    return DRAW;
+                } else {
+                    // println!("Returning a lose with white to move");
+                    return -WIN * (depth + 1) as isize;
+                }
+            }
+            false => {
+                let white_attack_mask = board.white_attack_mask(&tables);
+                if white_attack_mask & board.black_king == 0 {
+                    // println!("Returning a draw with black to move");
+                    return DRAW;
+                } else {
+                    // println!("Returning a lose with black to move");
+                    return -WIN * (depth + 1) as isize;
+                }
+            }
+        }
+    }
+    if depth == 0 {
+        // println!("Reached a depth of zero while there are still legal moves");
+        return eval(board, tables)
+            + (0.1 * (moves.len() as f64 - number_of_moves as f64)) as isize;
+    }
+    for mv in &moves {
+        // println!("Running child search on move {}", mv.to_string().unwrap());
+        board.make(&mv);
+        let score = negamax_child(
+            board,
+            tables,
+            beta.saturating_neg(),
+            alpha.saturating_neg(),
+            moves.len(),
+            depth - 1,
+        )
+        .saturating_neg();
+        board.unmake(&mv);
+
+        if score >= beta {
+            return beta;
+        }
+        if score > alpha {
+            alpha = score;
+        }
+    }
+    return alpha;
 }
 
 #[cfg(test)]
@@ -376,4 +480,13 @@ mod tests {
     //     let node_count = perft_search(&mut board, &tables, 5);
     //     assert_eq!(node_count, 164075551);
     // }
+
+    #[test]
+    fn foo() {
+        let mut board =
+            BoardState::state_from_string_fen("5R2/7k/3R1R2/8/8/8/2K5/8 w - - 0 1".to_string());
+        let tables = Tables::new();
+        let score = negamax(&mut board, &tables, 3);
+        panic!();
+    }
 }
