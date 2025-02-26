@@ -47,14 +47,16 @@ pub fn negamax(board: &mut BoardState, tables: &Tables, depth: usize) -> Result<
     let moves = generate(board, tables);
 
     let mut best_move = moves[0];
+    let mut alpha = isize::MIN;
+    let mut beta = isize::MAX;
     for mv in &moves {
         // println!("\nStarting search for move {}", mv.to_string().unwrap());
         board.make(&mv);
         let score = negamax_child(
             board,
             tables,
-            isize::MIN,
-            isize::MAX,
+            beta.saturating_neg(),
+            alpha.saturating_neg(),
             moves.len(),
             depth - 1,
         )
@@ -65,13 +67,18 @@ pub fn negamax(board: &mut BoardState, tables: &Tables, depth: usize) -> Result<
         //     score
         // );
         board.unmake(&mv);
-        if score > max {
+        if score > alpha {
+            alpha = score;
+            if alpha >= beta {
+                return Ok(*mv);
+            }
+            best_move = *mv;
             // println!(
             //     "The move set a new max! The previous max was {}, and the new one is {}",
             //     max, score
             // );
-            max = score;
-            best_move = *mv;
+            // max = score;
+            // best_move = *mv;
         }
     }
     return Ok(best_move);
