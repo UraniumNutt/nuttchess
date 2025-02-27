@@ -88,7 +88,7 @@ fn main() {
                     let _ = tokens.next();
                     let _ = tokens.next();
                     let _ = tokens.next();
-                    let best_move = negamax(&mut board, &tables, 6).unwrap();
+                    let best_move = negamax(&mut board, &tables, 5).unwrap();
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
                 _ => {}
