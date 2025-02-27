@@ -11,6 +11,8 @@ use search::negamax;
 use search::perft;
 use std::env;
 use std::path::Path;
+use std::time;
+use std::time::Instant;
 
 fn main() {
     let mut running = true;
@@ -35,12 +37,10 @@ fn main() {
             "position" => match tokens.next().unwrap() {
                 "startpos" => {
                     board = BoardState::starting_state();
-                    if tokens.next().unwrap() == "moves" {
+                    if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
                             board.apply_string_move(mv.to_string());
                         }
-                    } else {
-                        comm.engine_out(format!("Expected moves token"));
                     }
                 }
                 "fen" => {
@@ -53,12 +53,10 @@ fn main() {
                             comm.engine_out(format!("Error parsing fen string: {}", b));
                         }
                     }
-                    if tokens.next().unwrap() == "moves" {
+                    if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
                             board.apply_string_move(mv.to_string());
                         }
-                    } else {
-                        comm.engine_out(format!("Expected moves token"));
                     }
                 }
                 e => comm.engine_out(format!("Unexpected value {}", e)),
@@ -84,11 +82,22 @@ fn main() {
                 }
                 // TODO implement more / the proper searches
                 "wtime" => {
+                    // FIXME this is just for testing
+                    let starting_time = Instant::now();
                     // Just discard these for now
+                    let w_time = tokens.next().unwrap().parse::<u64>().unwrap();
                     let _ = tokens.next();
+                    let b_time = tokens.next().unwrap().parse::<u64>().unwrap();
                     let _ = tokens.next();
+                    let w_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
                     let _ = tokens.next();
-                    let best_move = negamax(&mut board, &tables, 5).unwrap();
+                    let b_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
+                    let time_to_spend = match board.white_to_move {
+                        true => (w_time / 20 + w_inc / 2) as u128,
+                        false => (b_time / 20 + b_inc / 2) as u128,
+                    };
+                    let best_move =
+                        negamax(&mut board, &tables, 7, starting_time, time_to_spend).unwrap();
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
                 _ => {}

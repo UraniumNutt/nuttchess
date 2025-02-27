@@ -1,4 +1,5 @@
 use std::isize;
+use std::time::Instant;
 
 use crate::board::*;
 use crate::eval::*;
@@ -41,7 +42,13 @@ pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> us
 }
 
 // Prototype search
-pub fn negamax(board: &mut BoardState, tables: &Tables, depth: usize) -> Result<MoveRep, String> {
+pub fn negamax(
+    board: &mut BoardState,
+    tables: &Tables,
+    depth: usize,
+    timer: Instant,
+    duration: u128,
+) -> Result<MoveRep, String> {
     let mut max = isize::MIN;
     // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let moves = generate(board, tables);
@@ -59,6 +66,8 @@ pub fn negamax(board: &mut BoardState, tables: &Tables, depth: usize) -> Result<
             alpha.saturating_neg(),
             moves.len(),
             depth - 1,
+            timer,
+            duration,
         )
         .saturating_neg();
         // println!(
@@ -91,6 +100,8 @@ fn negamax_child(
     mut beta: isize,
     number_of_moves: usize,
     depth: usize,
+    timer: Instant,
+    duration: u128,
 ) -> isize {
     let moves = generate(board, tables);
     if moves.len() == 0 {
@@ -125,6 +136,9 @@ fn negamax_child(
             + (0.1 * (moves.len() as f64 - number_of_moves as f64)) as isize;
     }
     for mv in &moves {
+        if timer.elapsed().as_millis() > duration {
+            return DRAW;
+        }
         // println!("Running child search on move {}", mv.to_string().unwrap());
         board.make(&mv);
         let score = negamax_child(
@@ -134,6 +148,8 @@ fn negamax_child(
             alpha.saturating_neg(),
             moves.len(),
             depth - 1,
+            timer,
+            duration,
         )
         .saturating_neg();
         board.unmake(&mv);
@@ -488,12 +504,14 @@ mod tests {
     //     assert_eq!(node_count, 164075551);
     // }
 
-    #[test]
-    fn foo() {
-        let mut board =
-            BoardState::state_from_string_fen("5R2/7k/3R1R2/8/8/8/2K5/8 w - - 0 1".to_string());
-        let tables = Tables::new();
-        let score = negamax(&mut board, &tables, 3);
-        panic!();
-    }
+    // #[test]
+    // fn foo() {
+    //     let timer = Instant::now();
+    //     while true {
+    //         if timer.elapsed().as_secs() > 5 {
+    //             break;
+    //         }
+    //     }
+    //     assert!(true);
+    // }
 }
