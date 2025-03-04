@@ -92,13 +92,36 @@ fn main() {
                     let w_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
                     let _ = tokens.next();
                     let b_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
+                    let buffer_time = 20;
                     let time_to_spend = match board.white_to_move {
-                        true => (w_time / 20 + w_inc / 2) as u128,
-                        false => (b_time / 20 + b_inc / 2) as u128,
+                        true => ((w_time / 20 + w_inc / 2) + buffer_time) as u128,
+                        false => ((b_time / 20 + b_inc / 2) + buffer_time) as u128,
                     };
-                    let best_move =
-                        negamax(&mut board, &tables, 7, starting_time, time_to_spend).unwrap();
+                    let best_move = negamax(
+                        &mut board,
+                        &tables,
+                        7,
+                        Some(starting_time),
+                        Some(time_to_spend),
+                    )
+                    .unwrap();
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
+                }
+                "depth" => {
+                    let depth = tokens.next();
+                    match depth {
+                        Some(d) => {
+                            if let Ok(depth_number) = d.parse::<u64>() {
+                                let best_move =
+                                    negamax(&mut board, &tables, depth_number as usize, None, None);
+                                comm.engine_out(format!(
+                                    "bestmove {}",
+                                    best_move.unwrap().to_string().unwrap()
+                                ));
+                            }
+                        }
+                        None => comm.engine_out(format!("Expected depth token")),
+                    }
                 }
                 _ => {}
             },

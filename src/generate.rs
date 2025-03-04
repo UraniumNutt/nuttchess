@@ -1,5 +1,6 @@
 use crate::board::*;
 use crate::tables::*;
+use crate::time::*;
 // Generate a vector of possible moves from the current board state
 pub fn generate(board: &BoardState, tables: &Tables) -> Vec<MoveRep> {
     // move vector
@@ -1289,6 +1290,8 @@ pub fn lsb(bb: u64) -> usize {
 mod tests {
     use std::hint::assert_unchecked;
 
+    use crate::search::negamax;
+
     use super::*;
 
     #[test]
@@ -1937,17 +1940,22 @@ mod tests {
         assert_eq!(!results.contains(&unexpected_mov), true);
     }
 
-    // #[test]
-    // fn test_white_promotion() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "rnbqkb2/pppppp1P/8/8/8/8/PPPPP1PP/RNBQKBNR w KQq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
+    #[test]
+    fn foo() {
+        let mut board = BoardState::state_from_string_fen(
+            "2b1k3/1p2P3/1P6/8/p7/P7/8/5rQK w - - 13 56".to_string(),
+        );
+        let tables = Tables::new();
 
-    //     let moves = generate(&board, &tables);
-    //     for mv in &moves {
-    //         println!("{:?}", mv);
-    //     }
-    //     panic!();
-    // }
+        let moves = generate(&board, &tables);
+        for mv in &moves {
+            println!("{}", mv.to_string().unwrap());
+        }
+
+        let starting_time = Instant::now();
+        let duration = 0;
+        let best_move = negamax(&mut board, &tables, 7, starting_time, duration);
+        println!("\n{}", best_move.unwrap().to_string().unwrap());
+        panic!();
+    }
 }
