@@ -61,6 +61,10 @@ fn main() {
                 }
                 e => comm.engine_out(format!("Unexpected value {}", e)),
             },
+            "print" => {
+                // Pretty print the board state
+                board.pretty_print_board();
+            }
             "go" => match tokens.next().unwrap() {
                 "perft" => {
                     let depth = tokens.next();
@@ -96,9 +100,31 @@ fn main() {
                         true => (w_time / 20 + w_inc / 2) as u128,
                         false => (b_time / 20 + b_inc / 2) as u128,
                     };
-                    let best_move =
-                        negamax(&mut board, &tables, 7, starting_time, time_to_spend).unwrap();
+                    let best_move = negamax(
+                        &mut board,
+                        &tables,
+                        7,
+                        Some(starting_time),
+                        Some(time_to_spend),
+                    )
+                    .unwrap();
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
+                }
+                "depth" => {
+                    let depth = tokens.next();
+                    match depth {
+                        Some(d) => {
+                            if let Ok(depth_number) = d.parse::<u64>() {
+                                let best_move =
+                                    negamax(&mut board, &tables, depth_number as usize, None, None);
+                                comm.engine_out(format!(
+                                    "bestmove {}",
+                                    best_move.unwrap().to_string().unwrap()
+                                ));
+                            }
+                        }
+                        None => comm.engine_out(format!("Expected depth token")),
+                    }
                 }
                 _ => {}
             },

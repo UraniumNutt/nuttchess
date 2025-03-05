@@ -635,7 +635,6 @@ pub fn move_king_to_safety(board: &BoardState, tables: &Tables) -> Vec<MoveRep> 
     moves
 }
 
-#[inline]
 fn white_pawn_moves(
     board: &BoardState,
     tables: &Tables,
@@ -758,7 +757,6 @@ fn white_pawn_moves(
     }
 }
 
-#[inline]
 fn white_knight_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -794,7 +792,6 @@ fn white_knight_attacks(
     }
 }
 
-#[inline]
 fn white_rook_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -827,7 +824,6 @@ fn white_rook_attacks(
     }
 }
 
-#[inline]
 fn white_bishop_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -860,7 +856,6 @@ fn white_bishop_attacks(
     }
 }
 
-#[inline]
 fn white_queen_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -916,7 +911,6 @@ fn white_queen_attacks(
     }
 }
 
-#[inline]
 fn white_king_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -953,7 +947,6 @@ fn white_king_attacks(
     }
 }
 
-#[inline]
 fn black_pawn_moves(
     board: &BoardState,
     tables: &Tables,
@@ -1077,7 +1070,6 @@ fn black_pawn_moves(
     }
 }
 
-#[inline]
 fn black_knight_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -1113,7 +1105,6 @@ fn black_knight_attacks(
     }
 }
 
-#[inline]
 fn black_rook_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -1146,7 +1137,6 @@ fn black_rook_attacks(
     }
 }
 
-#[inline]
 fn black_bishop_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -1179,7 +1169,6 @@ fn black_bishop_attacks(
     }
 }
 
-#[inline]
 fn black_queen_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -1234,7 +1223,6 @@ fn black_queen_attacks(
     }
 }
 
-#[inline]
 fn black_king_attacks(
     board: &BoardState,
     tables: &Tables,
@@ -1279,24 +1267,10 @@ pub fn pop_lsb(bb: &mut u64) -> usize {
     lsb
 }
 
-#[inline]
-// Get the lsb as a square index
-pub fn lsb(bb: u64) -> usize {
-    bb.trailing_zeros() as usize
-}
-
 #[cfg(test)]
 mod tests {
-    use std::hint::assert_unchecked;
 
     use super::*;
-
-    #[test]
-    fn test_lsb() {
-        let mut bb = 2;
-        let least_sig = lsb(bb);
-        assert_eq!(least_sig, 1);
-    }
 
     #[test]
     fn test_pop_lsb() {
@@ -1936,18 +1910,4 @@ mod tests {
         print_bitboard(board.black_attacking(&tables, board.white_king >> 2));
         assert_eq!(!results.contains(&unexpected_mov), true);
     }
-
-    // #[test]
-    // fn test_white_promotion() {
-    //     let mut board = BoardState::state_from_string_fen(
-    //         "rnbqkb2/pppppp1P/8/8/8/8/PPPPP1PP/RNBQKBNR w KQq - 0 1".to_string(),
-    //     );
-    //     let tables = Tables::new();
-
-    //     let moves = generate(&board, &tables);
-    //     for mv in &moves {
-    //         println!("{:?}", mv);
-    //     }
-    //     panic!();
-    // }
 }
