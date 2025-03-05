@@ -52,20 +52,6 @@ pub fn negamax(
     let mut max = isize::MIN;
     // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut moves = generate(board, tables);
-
-    // Move ordering
-    // TODO I think there should be a better way to do this. Making and unmaking for every move could be costly...
-    // Nonetheless, this improves prefomance significantly
-    // moves.sort_by(|a, b| {
-    //     board.make(&a);
-    //     let a_eval = eval(board, tables);
-    //     board.unmake(&a);
-    //     board.make(&b);
-    //     let b_eval = eval(board, tables);
-    //     board.unmake(&b);
-    //     return a_eval.cmp(&b_eval);
-    // });
-
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
     let mut beta = isize::MAX;
