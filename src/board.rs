@@ -391,7 +391,7 @@ impl BoardState {
         }
         // Black queenside
         if start == 1 << Tables::E8
-            && end == 1 << Tables::G8
+            && end == 1 << Tables::C8
             && self.black_queenside_castle_rights
             && self.get_piece_type(start) == Some(PieceType::King)
         {
