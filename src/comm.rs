@@ -22,10 +22,10 @@ impl Comm {
     }
     // Takes in a string, prints it, and logs it
     pub fn engine_out(&mut self, message: String) {
-        // self.file
-        //     .write(format!("<< {}\n", message.trim()).as_bytes())
-        //     .unwrap();
-        // self.file.flush().unwrap();
+        self.file
+            .write(format!("<< {}\n", message.trim()).as_bytes())
+            .unwrap();
+        self.file.flush().unwrap();
         print!("{}\n", message);
     }
 
@@ -34,10 +34,10 @@ impl Comm {
         let mut buffer = String::new();
         let stdin = io::stdin();
         stdin.read_line(&mut buffer).unwrap();
-        // self.file
-        //     .write(format!(">> {}\n", buffer.to_string().trim()).as_bytes())
-        //     .unwrap();
-        // self.file.flush().unwrap();
+        self.file
+            .write(format!(">> {}\n", buffer.to_string().trim()).as_bytes())
+            .unwrap();
+        self.file.flush().unwrap();
         buffer.trim().to_string()
     }
 }

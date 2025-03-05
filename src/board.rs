@@ -363,26 +363,96 @@ impl BoardState {
             }
         }
         // Handle castling logic
-        match (start, end) {
-            // White kingside
-            e if e == (1 << Tables::E1, 1 << Tables::G1) => {
-                move_rep.promotion = Some(Promotion::Castle)
-            }
-            // White queenside
-            e if e == (1 << Tables::E1, 1 << Tables::C1) => {
-                move_rep.promotion = Some(Promotion::Castle)
-            }
-            // Black kingside
-            e if e == (1 << Tables::E8, 1 << Tables::G8) => {
-                move_rep.promotion = Some(Promotion::Castle)
-            }
-            // Black queenside
-            e if e == (1 << Tables::E8, 1 << Tables::C8) => {
-                move_rep.promotion = Some(Promotion::Castle)
-            }
-            _ => {}
+        // Is the move even a castle?
+
+        // White kingside
+        if start == 1 << Tables::E1
+            && end == 1 << Tables::G1
+            && self.white_kingside_castle_rights
+            && self.get_piece_type(start) == Some(PieceType::King)
+        {
+            move_rep.promotion = Some(Promotion::Castle);
         }
+        // White kingside
+        if start == 1 << Tables::E1
+            && end == 1 << Tables::C1
+            && self.white_queenside_castle_rights
+            && self.get_piece_type(start) == Some(PieceType::King)
+        {
+            move_rep.promotion = Some(Promotion::Castle);
+        }
+        // Black kingside
+        if start == 1 << Tables::E8
+            && end == 1 << Tables::G8
+            && self.black_kingside_castle_rights
+            && self.get_piece_type(start) == Some(PieceType::King)
+        {
+            move_rep.promotion = Some(Promotion::Castle);
+        }
+        // Black queenside
+        if start == 1 << Tables::E8
+            && end == 1 << Tables::G8
+            && self.black_queenside_castle_rights
+            && self.get_piece_type(start) == Some(PieceType::King)
+        {
+            move_rep.promotion = Some(Promotion::Castle);
+        }
+
         self.make(&move_rep);
+    }
+
+    /// Prints the board in an easy to understand way
+    pub fn pretty_print_board(&self) {
+        // TODO This could be improved alot
+        fn white_square(piece: &str) -> String {
+            format!("\x1b[48;2;196;187;90m{}\x1b[0m", piece)
+        }
+        fn black_square(piece: &str) -> String {
+            format!("\x1b[48;2;142;79;15m{}\x1b[0m", piece)
+        }
+
+        print!("\n");
+        for index in 1..=64 {
+            let index = 64 - index;
+            // NOTE On my machine, the white chess piece characters look black, so this reflects that
+            let piece: &str = match self.get_piece_and_color(1 << index) {
+                Some((PieceType::Pawn, false)) => "♙ ",
+                Some((PieceType::Knight, false)) => "♘ ",
+                Some((PieceType::Bishop, false)) => "♗ ",
+                Some((PieceType::Rook, false)) => "♖ ",
+                Some((PieceType::Queen, false)) => "♕ ",
+                Some((PieceType::King, false)) => "♔ ",
+
+                Some((PieceType::Pawn, true)) => "♟ ",
+                Some((PieceType::Knight, true)) => "♞ ",
+                Some((PieceType::Bishop, true)) => "♝ ",
+                Some((PieceType::Rook, true)) => "♜ ",
+                Some((PieceType::Queen, true)) => "♛ ",
+                Some((PieceType::King, true)) => "♚ ",
+                _ => "  ",
+            };
+            match (index % 2, (index / 8) % 2) {
+                (0, 0) => {
+                    print!("{}", white_square(piece));
+                }
+                (0, 1) => {
+                    print!("{}", black_square(piece));
+                }
+                (1, 0) => {
+                    print!("{}", black_square(piece));
+                }
+                (1, 1) => {
+                    print!("{}", white_square(piece));
+                }
+
+                _ => {}
+            }
+            if index % 8 == 0 {
+                print!("\n");
+            }
+            let _ = io::stdout().flush();
+        }
+        print!("\n");
     }
 
     /// Pushes the current nonreversible state to the stack
@@ -414,11 +484,6 @@ impl BoardState {
 
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
-        // DEBUG
-        if play.ending_square == self.white_king || play.ending_square == self.black_king {
-            println!("Move attacking king! {}", play.to_string().unwrap());
-            panic!();
-        }
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
@@ -742,6 +807,60 @@ impl BoardState {
         }
         if self.white_king & mask != 0 || self.black_king & mask != 0 {
             return Some(PieceType::King);
+        }
+
+        None
+    }
+
+    #[inline]
+    /// Gets the type of piece and color
+    pub fn get_piece_and_color(&self, mask: u64) -> Option<(PieceType, bool)> {
+        if self.white_pawns & mask != 0 {
+            return Some((PieceType::Pawn, true));
+        }
+
+        if self.white_knights & mask != 0 {
+            return Some((PieceType::Knight, true));
+        }
+
+        if self.white_bishops & mask != 0 {
+            return Some((PieceType::Bishop, true));
+        }
+
+        if self.white_rooks & mask != 0 {
+            return Some((PieceType::Rook, true));
+        }
+
+        if self.white_queens & mask != 0 {
+            return Some((PieceType::Queen, true));
+        }
+
+        if self.white_king & mask != 0 {
+            return Some((PieceType::King, true));
+        }
+
+        if self.black_pawns & mask != 0 {
+            return Some((PieceType::Pawn, false));
+        }
+
+        if self.black_knights & mask != 0 {
+            return Some((PieceType::Knight, false));
+        }
+
+        if self.black_bishops & mask != 0 {
+            return Some((PieceType::Bishop, false));
+        }
+
+        if self.black_rooks & mask != 0 {
+            return Some((PieceType::Rook, false));
+        }
+
+        if self.black_queens & mask != 0 {
+            return Some((PieceType::Queen, false));
+        }
+
+        if self.black_king & mask != 0 {
+            return Some((PieceType::King, false));
         }
 
         None
@@ -1618,7 +1737,7 @@ pub fn print_bitboard(bb: u64) {
     );
 
     println!("\n    a b c d e f g h");
-    io::stdout().flush();
+    let _ = io::stdout().flush();
 }
 
 #[cfg(test)]

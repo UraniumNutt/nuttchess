@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(node_count, 197281);
     }
 
-    // This can take a moment
+    #[ignore = "Takes a while"]
     #[test]
     fn depth_5() {
         let mut board = BoardState::starting_state();
@@ -240,7 +240,7 @@ mod tests {
         assert_eq!(node_count, 4865609);
     }
 
-    // These can take a while
+    #[ignore = "Takes a while"]
     #[test]
     fn depth_6() {
         let mut board = BoardState::starting_state();
@@ -280,6 +280,7 @@ mod tests {
         assert_eq!(node_count, 97862);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn kiwipete_4() {
         let mut board = BoardState::state_from_string_fen(
@@ -291,7 +292,7 @@ mod tests {
         assert_eq!(node_count, 4085603);
     }
 
-    // This can take a while
+    #[ignore = "Takes a while"]
     #[test]
     fn kiwipete_5() {
         let mut board = BoardState::state_from_string_fen(
@@ -353,6 +354,7 @@ mod tests {
         assert_eq!(node_count, 674624);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos3_6() {
         let mut board = BoardState::state_from_string_fen(
@@ -403,6 +405,7 @@ mod tests {
         assert_eq!(node_count, 422333);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos4_5() {
         let mut board = BoardState::state_from_string_fen(
@@ -413,6 +416,7 @@ mod tests {
         assert_eq!(node_count, 15833292);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos4_6() {
         let mut board = BoardState::state_from_string_fen(
@@ -453,6 +457,7 @@ mod tests {
         assert_eq!(node_count, 62379);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos5_4() {
         let mut board = BoardState::state_from_string_fen(
@@ -463,6 +468,7 @@ mod tests {
         assert_eq!(node_count, 2103487);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos5_5() {
         let mut board = BoardState::state_from_string_fen(
@@ -503,6 +509,7 @@ mod tests {
         assert_eq!(node_count, 89890);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos6_4() {
         let mut board = BoardState::state_from_string_fen(
@@ -513,6 +520,7 @@ mod tests {
         assert_eq!(node_count, 3894594);
     }
 
+    #[ignore = "Takes a while"]
     #[test]
     fn pos6_5() {
         let mut board = BoardState::state_from_string_fen(

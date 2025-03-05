@@ -61,6 +61,10 @@ fn main() {
                 }
                 e => comm.engine_out(format!("Unexpected value {}", e)),
             },
+            "print" => {
+                // Pretty print the board state
+                board.pretty_print_board();
+            }
             "go" => match tokens.next().unwrap() {
                 "perft" => {
                     let depth = tokens.next();
@@ -92,10 +96,9 @@ fn main() {
                     let w_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
                     let _ = tokens.next();
                     let b_inc = tokens.next().unwrap_or("").parse::<u64>().unwrap_or(0);
-                    let buffer_time = 20;
                     let time_to_spend = match board.white_to_move {
-                        true => ((w_time / 20 + w_inc / 2) + buffer_time) as u128,
-                        false => ((b_time / 20 + b_inc / 2) + buffer_time) as u128,
+                        true => (w_time / 20 + w_inc / 2) as u128,
+                        false => (b_time / 20 + b_inc / 2) as u128,
                     };
                     let best_move = negamax(
                         &mut board,
