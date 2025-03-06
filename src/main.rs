@@ -103,7 +103,7 @@ fn main() {
                     let best_move = negamax(
                         &mut board,
                         &tables,
-                        7,
+                        5,
                         Some(starting_time),
                         Some(time_to_spend),
                     )

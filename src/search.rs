@@ -69,6 +69,7 @@ pub fn negamax(
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
     let mut beta = isize::MAX;
+    let mut node_count = 0;
     for mv in &moves {
         // println!("\nStarting search for move {}", mv.to_string().unwrap());
         board.make(&mv);
@@ -81,6 +82,7 @@ pub fn negamax(
             depth - 1,
             timer,
             duration,
+            &mut node_count,
         )
         .saturating_neg();
         // println!(
@@ -115,6 +117,7 @@ fn negamax_child(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
+    node_count: &mut usize,
 ) -> isize {
     let moves = generate(board, tables);
     if moves.len() == 0 {
@@ -146,7 +149,6 @@ fn negamax_child(
     if depth == 0 {
         *node_count += 1;
         return eval(board, tables, moves.len(), last_number_of_moves);
-
     }
     for mv in &moves {
         match (timer, duration) {
@@ -168,6 +170,7 @@ fn negamax_child(
             depth - 1,
             timer,
             duration,
+            node_count,
         )
         .saturating_neg();
         board.unmake(&mv);
