@@ -80,6 +80,9 @@ pub fn negamax(
             }
             best_move = *mv;
         }
+        if *terminate_flag {
+            break;
+        }
     }
     return Ok(best_move);
 }
@@ -154,7 +157,6 @@ fn negamax_child(
     return alpha;
 }
 
-/// Check the timer, changine terminate_flag to true if it has elapsed
 fn timer_check(timer: Option<Instant>, duration: Option<u128>, terminate_flag: &mut bool) {
     match (timer, duration) {
         (Some(t), Some(d)) => {
