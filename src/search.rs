@@ -111,7 +111,7 @@ fn negamax_child(
     tables: &Tables,
     mut alpha: isize,
     mut beta: isize,
-    number_of_moves: usize,
+    last_number_of_moves: usize,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
@@ -144,9 +144,9 @@ fn negamax_child(
         }
     }
     if depth == 0 {
-        // println!("Reached a depth of zero while there are still legal moves");
-        return eval(board, tables)
-            + (0.1 * (moves.len() as f64 - number_of_moves as f64)) as isize;
+        *node_count += 1;
+        return eval(board, tables, moves.len(), last_number_of_moves);
+
     }
     for mv in &moves {
         match (timer, duration) {
