@@ -89,7 +89,7 @@ fn negamax_child(
     tables: &Tables,
     mut alpha: isize,
     mut beta: isize,
-    number_of_moves: usize,
+    last_number_of_moves: usize,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
@@ -119,7 +119,7 @@ fn negamax_child(
     }
     if depth == 0 {
         *node_count += 1;
-        return eval(board, tables, number_of_moves);
+        return eval(board, tables, moves.len(), last_number_of_moves);
     }
     for mv in &moves {
         board.make(&mv);
