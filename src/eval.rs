@@ -15,11 +15,10 @@ const KNIGHT: isize = 3;
 const PAWN: isize = 1;
 
 // Returns a score for the given board position
-pub fn eval(board: &BoardState, tables: &Tables) -> isize {
+pub fn eval(board: &BoardState, tables: &Tables, number_of_moves: usize) -> isize {
     // Material evaluation
-    material_value(board)
+    material_value(board) + (0.1 * (number_of_moves as f64 - number_of_moves as f64)) as isize
 }
-
 // Get the value of the material relative to the side to move
 pub fn material_value(board: &BoardState) -> isize {
     // White relative value
