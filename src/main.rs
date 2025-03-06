@@ -100,32 +100,23 @@ fn main() {
                         true => (w_time / 20 + w_inc / 2) as u128,
                         false => (b_time / 20 + b_inc / 2) as u128,
                     };
-                    let mut terminate_flag = false;
                     let best_move = negamax(
                         &mut board,
                         &tables,
                         7,
                         Some(starting_time),
                         Some(time_to_spend),
-                        &mut terminate_flag,
                     )
                     .unwrap();
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
                 "depth" => {
                     let depth = tokens.next();
-                    let mut terminate_flag = false;
                     match depth {
                         Some(d) => {
                             if let Ok(depth_number) = d.parse::<u64>() {
-                                let best_move = negamax(
-                                    &mut board,
-                                    &tables,
-                                    depth_number as usize,
-                                    None,
-                                    None,
-                                    &mut terminate_flag,
-                                );
+                                let best_move =
+                                    negamax(&mut board, &tables, depth_number as usize, None, None);
                                 comm.engine_out(format!(
                                     "bestmove {}",
                                     best_move.unwrap().to_string().unwrap()
