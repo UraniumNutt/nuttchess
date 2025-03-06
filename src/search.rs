@@ -48,29 +48,16 @@ pub fn negamax(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
+    terminate_flag: &mut bool,
 ) -> Result<MoveRep, String> {
     let mut max = isize::MIN;
     // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut moves = generate(board, tables);
-
-    // Move ordering
-    // TODO I think there should be a better way to do this. Making and unmaking for every move could be costly...
-    // Nonetheless, this improves prefomance significantly
-    // moves.sort_by(|a, b| {
-    //     board.make(&a);
-    //     let a_eval = eval(board, tables);
-    //     board.unmake(&a);
-    //     board.make(&b);
-    //     let b_eval = eval(board, tables);
-    //     board.unmake(&b);
-    //     return a_eval.cmp(&b_eval);
-    // });
-
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
     let mut beta = isize::MAX;
+    let mut node_count = 0;
     for mv in &moves {
-        // println!("\nStarting search for move {}", mv.to_string().unwrap());
         board.make(&mv);
         let score = negamax_child(
             board,
@@ -81,13 +68,10 @@ pub fn negamax(
             depth - 1,
             timer,
             duration,
+            terminate_flag,
+            &mut node_count,
         )
         .saturating_neg();
-        // println!(
-        //     "Completed search for move {}, with a score of {}",
-        //     mv.to_string().unwrap(),
-        //     score
-        // );
         board.unmake(&mv);
         if score > alpha {
             alpha = score;
@@ -95,12 +79,9 @@ pub fn negamax(
                 return Ok(*mv);
             }
             best_move = *mv;
-            // println!(
-            //     "The move set a new max! The previous max was {}, and the new one is {}",
-            //     max, score
-            // );
-            // max = score;
-            // best_move = *mv;
+        }
+        if *terminate_flag {
+            break;
         }
     }
     return Ok(best_move);
@@ -115,49 +96,35 @@ fn negamax_child(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
+    terminate_flag: &mut bool,
+    node_count: &mut usize,
 ) -> isize {
     let moves = generate(board, tables);
     if moves.len() == 0 {
-        // println!("Zeros moves generated at a depth of {}", depth);
-        // print_bitboard(board.occupancy());
         match board.white_to_move {
             true => {
                 let black_attack_mask = board.black_attack_mask(&tables);
                 if black_attack_mask & board.white_king == 0 {
-                    // println!("Returning a draw with white to move");
                     return DRAW;
                 } else {
-                    // println!("Returning a lose with white to move");
                     return -WIN * (depth + 1) as isize;
                 }
             }
             false => {
                 let white_attack_mask = board.white_attack_mask(&tables);
                 if white_attack_mask & board.black_king == 0 {
-                    // println!("Returning a draw with black to move");
                     return DRAW;
                 } else {
-                    // println!("Returning a lose with black to move");
                     return -WIN * (depth + 1) as isize;
                 }
             }
         }
     }
     if depth == 0 {
-        // println!("Reached a depth of zero while there are still legal moves");
-        return eval(board, tables)
-            + (0.1 * (moves.len() as f64 - number_of_moves as f64)) as isize;
+        *node_count += 1;
+        return eval(board, tables, number_of_moves);
     }
     for mv in &moves {
-        match (timer, duration) {
-            (Some(t), Some(d)) => {
-                if t.elapsed().as_millis() > d {
-                    return DRAW;
-                }
-            }
-            _ => {}
-        }
-        // println!("Running child search on move {}", mv.to_string().unwrap());
         board.make(&mv);
         let score = negamax_child(
             board,
@@ -168,6 +135,8 @@ fn negamax_child(
             depth - 1,
             timer,
             duration,
+            terminate_flag,
+            node_count,
         )
         .saturating_neg();
         board.unmake(&mv);
@@ -178,8 +147,25 @@ fn negamax_child(
         if score > alpha {
             alpha = score;
         }
+        if *terminate_flag {
+            break;
+        }
+        if *node_count % 2048 == 0 {
+            timer_check(timer, duration, terminate_flag);
+        }
     }
     return alpha;
+}
+
+fn timer_check(timer: Option<Instant>, duration: Option<u128>, terminate_flag: &mut bool) {
+    match (timer, duration) {
+        (Some(t), Some(d)) => {
+            if t.elapsed().as_millis() > d {
+                *terminate_flag = true;
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
