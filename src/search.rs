@@ -53,25 +53,11 @@ pub fn negamax(
     // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut moves = generate(board, tables);
 
-    // Move ordering
-    // TODO I think there should be a better way to do this. Making and unmaking for every move could be costly...
-    // Nonetheless, this improves prefomance significantly
-    // moves.sort_by(|a, b| {
-    //     board.make(&a);
-    //     let a_eval = eval(board, tables);
-    //     board.unmake(&a);
-    //     board.make(&b);
-    //     let b_eval = eval(board, tables);
-    //     board.unmake(&b);
-    //     return a_eval.cmp(&b_eval);
-    // });
-
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
     let mut beta = isize::MAX;
     let mut node_count = 0;
     for mv in &moves {
-        // println!("\nStarting search for move {}", mv.to_string().unwrap());
         board.make(&mv);
         let score = negamax_child(
             board,
@@ -85,11 +71,6 @@ pub fn negamax(
             &mut node_count,
         )
         .saturating_neg();
-        // println!(
-        //     "Completed search for move {}, with a score of {}",
-        //     mv.to_string().unwrap(),
-        //     score
-        // );
         board.unmake(&mv);
         if score > alpha {
             alpha = score;
@@ -97,12 +78,6 @@ pub fn negamax(
                 return Ok(*mv);
             }
             best_move = *mv;
-            // println!(
-            //     "The move set a new max! The previous max was {}, and the new one is {}",
-            //     max, score
-            // );
-            // max = score;
-            // best_move = *mv;
         }
     }
     return Ok(best_move);
@@ -183,6 +158,37 @@ fn negamax_child(
         }
     }
     return alpha;
+}
+
+/// Preformes a search using iterative deepening
+pub fn id_search(
+    board: &mut BoardState,
+    tables: &Tables,
+    depth: usize,
+    timer: Option<Instant>,
+    duration: Option<u128>,
+    node_count: &mut usize,
+) -> MoveRep {
+    let mut depth_count = 1;
+    let mut mv = generate(board, tables)[0];
+    while !timer_check(timer, duration) && depth_count != depth {
+        mv = negamax(board, tables, depth_count, timer, duration).unwrap();
+        depth_count += 1;
+    }
+    mv
+}
+
+pub fn timer_check(timer: Option<Instant>, duration: Option<u128>) -> bool {
+    match (timer, duration) {
+        (Some(t), Some(d)) => {
+            if t.elapsed().as_millis() > d {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        _ => return false,
+    }
 }
 
 #[cfg(test)]

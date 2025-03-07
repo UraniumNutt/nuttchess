@@ -7,6 +7,7 @@ pub mod tables;
 use crate::board::*;
 use crate::comm::*;
 use crate::tables::*;
+use search::id_search;
 use search::negamax;
 use search::perft;
 use std::env;
@@ -100,14 +101,15 @@ fn main() {
                         true => (w_time / 20 + w_inc / 2) as u128,
                         false => (b_time / 20 + b_inc / 2) as u128,
                     };
-                    let best_move = negamax(
+                    let mut node_count = 0;
+                    let best_move = id_search(
                         &mut board,
                         &tables,
-                        5,
+                        7,
                         Some(starting_time),
                         Some(time_to_spend),
-                    )
-                    .unwrap();
+                        &mut node_count,
+                    );
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
                 "depth" => {

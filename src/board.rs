@@ -331,7 +331,6 @@ impl BoardState {
     }
 
     fn move_rep_from_masks(&self, start: u64, end: u64) -> MoveRep {
-        // TODO This is probably crashing because it cant handle promotion (which include castling!)
         let moved_piece = self.get_piece_type(start);
         let attacked_piece = self.get_piece_type(end);
         MoveRep {
@@ -620,8 +619,6 @@ impl BoardState {
                     self.set(1 << Tables::H1, Some(PieceType::Rook));
                     self.clear(play.ending_square, Some(PieceType::King));
                     self.clear(1 << Tables::F1, Some(PieceType::Rook));
-                    self.white_queenside_castle_rights = true;
-                    self.white_kingside_castle_rights = true;
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
@@ -629,8 +626,6 @@ impl BoardState {
                     self.set(1 << Tables::A1, Some(PieceType::Rook));
                     self.clear(play.ending_square, Some(PieceType::King));
                     self.clear(1 << Tables::D1, Some(PieceType::Rook));
-                    self.white_queenside_castle_rights = true;
-                    self.white_kingside_castle_rights = true;
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
@@ -638,8 +633,6 @@ impl BoardState {
                     self.set(1 << Tables::H8, Some(PieceType::Rook));
                     self.clear(play.ending_square, Some(PieceType::King));
                     self.clear(1 << Tables::F8, Some(PieceType::Rook));
-                    self.black_queenside_castle_rights = true;
-                    self.black_kingside_castle_rights = true;
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
@@ -647,8 +640,6 @@ impl BoardState {
                     self.set(1 << Tables::A8, Some(PieceType::Rook));
                     self.clear(play.ending_square, Some(PieceType::King));
                     self.clear(1 << Tables::D8, Some(PieceType::Rook));
-                    self.black_queenside_castle_rights = true;
-                    self.black_kingside_castle_rights = true;
                 }
                 _ => return,
             }
