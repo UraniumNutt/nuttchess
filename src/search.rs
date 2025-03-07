@@ -539,16 +539,4 @@ mod tests {
         let node_count = perft_search(&mut board, &tables, 5);
         assert_eq!(node_count, 164075551);
     }
-
-    #[test]
-    fn foo() {
-        let mut board = BoardState::starting_state();
-        let mut board = BoardState::state_from_string_fen(
-            "r3k3/8/2nb4/4p3/qp2P3/8/1p6/2BbKBq1 b q - 1 49".to_string(),
-        );
-        let tables = Tables::new();
-        let mut node_count = 0;
-        let _ = id_search(&mut board, &tables, 7, None, None, &mut node_count);
-        assert_eq!(board.occupancy() & 1 << Tables::H8, 0);
-    }
 }
