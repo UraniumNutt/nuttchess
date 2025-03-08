@@ -1199,6 +1199,8 @@ impl BoardState {
         let piece_index = target.trailing_zeros() as usize;
 
         // TODO add en passant attacks
+        // FIXME Should this even be done here? Since only a pawn can do an en passant attack,
+        // If this function added en passant to the mask, we would just need extra logic somewere else anyway
 
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
@@ -1269,6 +1271,8 @@ impl BoardState {
         let piece_index = target.trailing_zeros() as usize;
 
         // TODO add en passant attacks
+        // FIXME Should this even be done here? Since only a pawn can do an en passant attack,
+        // If this function added en passant to the mask, we would just need extra logic somewere else anyway
 
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric

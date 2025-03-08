@@ -573,4 +573,24 @@ mod tests {
         let node_count = perft_search(&mut board, &tables, 5);
         assert_eq!(node_count, 164075551);
     }
+
+    #[test]
+    fn illegal_pawn_move() {
+        let mut board = BoardState::state_from_string_fen(
+            "r4q1r/pp6/2nP3P/2PNpbkp/Q4Pp1/6P1/PP6/R3KBNR b KQ f3 0 19".to_string(),
+        );
+        let tables = Tables::new();
+        let move1 = MoveRep::new(
+            1 << Tables::E5,
+            1 << Tables::F3,
+            None,
+            PieceType::Pawn,
+            Some(PieceType::Pawn),
+        );
+        let moves = generate(&board, &tables);
+        for mv in &moves {
+            println!("{}", mv.to_string().unwrap());
+        }
+        assert!(!moves.contains(&move1));
+    }
 }
