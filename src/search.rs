@@ -1,4 +1,6 @@
+use std::cmp::Ordering;
 use std::isize;
+use std::iter::zip;
 use std::time::Instant;
 
 use crate::board::*;
@@ -169,13 +171,45 @@ pub fn id_search(
     duration: Option<u128>,
     node_count: &mut usize,
 ) -> MoveRep {
-    let mut depth_count = 1;
-    let mut mv = generate(board, tables)[0];
-    while !timer_check(timer, duration) && depth_count != depth {
-        mv = negamax(board, tables, depth_count, timer, duration).unwrap();
-        depth_count += 1;
+    // Create a vector of tuples containing the possible moves, and the scores of those moves
+    let mut moves = generate(board, tables);
+    let mut scores = vec![0; moves.len()];
+    let mut move_scores: Vec<(MoveRep, isize)> = zip(moves, scores).collect();
+    let move_length = move_scores.len();
+    let mut current_best = move_scores[0].0;
+    let mut current_depth = 1;
+
+    while !timer_check(timer, duration) {
+        // First, generate the scores
+        let mut alpha = isize::MIN;
+        let mut beta = isize::MAX;
+
+        for ms in &mut move_scores {
+            if timer_check(timer, duration) {
+                return current_best;
+            }
+            board.make(&ms.0);
+            ms.1 = negamax_child(
+                board,
+                tables,
+                alpha,
+                beta,
+                move_length,
+                current_depth,
+                timer,
+                duration,
+                node_count,
+            );
+            board.unmake(&ms.0);
+        }
+
+        // Now sort the move scores for the next iteration
+        move_scores.sort_by(|a, b| a.1.cmp(&b.1));
+        current_best = move_scores[0].0;
+        current_depth += 1;
     }
-    mv
+
+    current_best
 }
 
 pub fn timer_check(timer: Option<Instant>, duration: Option<u128>) -> bool {
