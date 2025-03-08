@@ -1,3 +1,5 @@
+use core::str;
+
 use crate::board::*;
 use crate::tables::*;
 // Generate a vector of possible moves from the current board state
@@ -394,37 +396,55 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
     while possible_attacks != 0 {
         let start_square = pop_lsb(&mut possible_attacks);
         let piece_type = board.get_piece_type(1 << start_square);
+
+        // FIXME Remove this code? To make this general purpose, we should (?) generate en passant attacks
+        // However, currently where we use this function, we also generate en passent in a seperate step,
+        // Which means we can remove this code (currently) without failing any tests
         // Special logic to handle en passant targets
         // White en passant attack
-        if board.white_to_move
-            && board.en_passant_target >> 8 & target != 0
-            && board.white_pawns & 1 << start_square != 0
-        {
-            let mv = MoveRep::new(
-                1 << start_square,
-                board.en_passant_target,
-                None,
-                PieceType::Pawn,
-                Some(PieceType::Pawn),
-            );
-            moves.push(mv);
-            continue;
-        }
-        // Black en passant attack
-        if !board.white_to_move
-            && board.en_passant_target << 8 & target != 0
-            && board.black_pawns & 1 << start_square != 0
-        {
-            let mv = MoveRep::new(
-                1 << start_square,
-                board.en_passant_target,
-                None,
-                PieceType::Pawn,
-                Some(PieceType::Pawn),
-            );
-            moves.push(mv);
-            continue;
-        }
+        // if board.white_to_move
+        //     && board.en_passant_target != 0
+        //     && piece_type == Some(PieceType::Pawn)
+        // {
+        //     let attacking_pawn = tables.black_pawn_attacks
+        //         [board.en_passant_target.trailing_zeros() as usize]
+        //         & 1 << start_square;
+        //     if attacking_pawn == 0 {
+        //         continue;
+        //     }
+        //     let mv = MoveRep::new(
+        //         1 << start_square,
+        //         board.en_passant_target,
+        //         None,
+        //         PieceType::Pawn,
+        //         Some(PieceType::Pawn),
+        //     );
+        //     moves.push(mv);
+        //     continue;
+        // }
+
+        // // Black en passant attack
+        // if !board.white_to_move
+        //     && board.en_passant_target != 0
+        //     && piece_type == Some(PieceType::Pawn)
+        // {
+        //     let attacking_pawn = tables.white_pawn_attacks
+        //         [board.en_passant_target.trailing_zeros() as usize]
+        //         & 1 << start_square;
+        //     if attacking_pawn == 0 {
+        //         continue;
+        //     }
+        //     let mv = MoveRep::new(
+        //         1 << start_square,
+        //         board.en_passant_target,
+        //         None,
+        //         PieceType::Pawn,
+        //         Some(PieceType::Pawn),
+        //     );
+        //     moves.push(mv);
+        //     continue;
+        // }
+
         let mv = MoveRep {
             starting_square: 1 << start_square,
             ending_square: target,
@@ -452,7 +472,8 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
                     moves.push(rook_promotion);
                     moves.push(bishop_promotion);
                     moves.push(knight_promotion);
-                } else if !board.white_to_move && mv.ending_square & Tables::RANK_1 != 0 {
+                }
+                if !board.white_to_move && mv.ending_square & Tables::RANK_1 != 0 {
                     // Black promotion
                     let mut queen_promotion = mv.clone();
                     queen_promotion.promotion = Some(Promotion::Queen);
@@ -466,7 +487,8 @@ pub fn generate_attacking_moves(board: &BoardState, tables: &Tables, target: u64
                     moves.push(rook_promotion);
                     moves.push(bishop_promotion);
                     moves.push(knight_promotion);
-                } else {
+                }
+                if (mv.ending_square & (Tables::RANK_1 | Tables::RANK_8)) == 0 {
                     moves.push(mv);
                 }
             } else {
