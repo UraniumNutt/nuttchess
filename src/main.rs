@@ -17,7 +17,7 @@ use std::time::Instant;
 
 fn main() {
     let mut running = true;
-    let log_file = Path::new("log.txt");
+    let log_file = Path::new("foo.txt");
     let mut comm = Comm::create(log_file).unwrap();
 
     let mut board = BoardState::starting_state();
