@@ -125,9 +125,7 @@ fn negamax_child(
     }
     if depth == 0 {
         *node_count += 1;
-        // TODO Investigate delta pruning. The fact that depth limits greater than 2 dont really improve preformance suggests
-        // that this is not really a great approach
-        return quiescence(board, tables, alpha, beta, 2, timer, duration, moves.len());
+        return eval(board, tables, moves.len(), last_number_of_moves);
     }
     for mv in &moves {
         match (timer, duration) {
@@ -212,69 +210,6 @@ pub fn id_search(
     }
 
     current_best
-}
-
-/// Preform the quiescence search
-fn quiescence(
-    board: &mut BoardState,
-    tables: &Tables,
-    mut alpha: isize,
-    mut beta: isize,
-    depth: usize,
-    timer: Option<Instant>,
-    duration: Option<u128>,
-    last_number_moves: usize,
-) -> isize {
-    let moves = generate(board, tables);
-    let number_moves = moves.len();
-    let initial_eval = eval(board, tables, number_moves, last_number_moves);
-    // TODO Investigate using delta pruning instead of an arbitrary depth limit
-    if depth == 0 {
-        return initial_eval;
-    }
-    let mut best_value = initial_eval;
-
-    if initial_eval >= beta {
-        return initial_eval;
-    }
-    if alpha < initial_eval {
-        alpha = initial_eval;
-    }
-
-    for mv in &moves {
-        if timer_check(timer, duration) {
-            break;
-        }
-        // TODO Make a diffrent move generation function which only produces captures
-        if mv.ending_square & board.occupancy() == 0 {
-            // Skip non captures
-            continue;
-        }
-        board.make(&mv);
-        let score = quiescence(
-            board,
-            tables,
-            beta.saturating_neg(),
-            alpha.saturating_neg(),
-            depth - 1,
-            timer,
-            duration,
-            number_moves,
-        )
-        .saturating_neg();
-        board.unmake(&mv);
-        if score >= beta {
-            return score;
-        }
-        if score > best_value {
-            best_value = score;
-        }
-        if score > alpha {
-            alpha = score;
-        }
-    }
-
-    best_value
 }
 
 pub fn timer_check(timer: Option<Instant>, duration: Option<u128>) -> bool {
