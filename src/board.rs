@@ -1,4 +1,5 @@
 // use crate::Tables;
+use crate::eval::{get_piece_value, piece_square_score};
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,6 +26,7 @@ pub struct BoardState {
     pub en_passant_target: u64,
     pub reversable_move_counter: u8,
     pub full_move_counter: u16,
+    pub piece_square_score: isize,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
@@ -104,7 +106,7 @@ impl MoveStackFrame {
 
 impl BoardState {
     pub fn starting_state() -> BoardState {
-        BoardState {
+        let mut state = BoardState {
             white_pawns: 0xff00,
             white_knights: 0x42,
             white_rooks: 0x81,
@@ -127,9 +129,13 @@ impl BoardState {
             en_passant_target: 0x0,
             reversable_move_counter: 0,
             full_move_counter: 1,
+            piece_square_score: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
-        }
+        };
+
+        state.piece_square_score = piece_square_score(&state);
+        state
     }
 
     fn empty_state() -> BoardState {
@@ -156,6 +162,7 @@ impl BoardState {
             en_passant_target: 0,
             reversable_move_counter: 0,
             full_move_counter: 0,
+            piece_square_score: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         }
@@ -527,6 +534,8 @@ impl BoardState {
                 _ => return,
             }
             self.white_to_move = !self.white_to_move;
+            // Swap the score to be relative to the new side to move
+            self.piece_square_score *= -1;
             return;
         }
         self.push_state();
@@ -603,6 +612,8 @@ impl BoardState {
             self.en_passant_target = 0;
         }
         self.white_to_move = !self.white_to_move;
+        // Swap the score to be relative to the new side to move
+        self.piece_square_score *= -1;
     }
 
     // Reverts the move from the board. Pops from the move stack
@@ -612,6 +623,8 @@ impl BoardState {
         if play.promotion == Some(Promotion::Castle) {
             // Swap side to play first
             self.white_to_move = !self.white_to_move;
+            // Swap the score to be relative to the new side to move
+            self.piece_square_score *= -1;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
@@ -657,6 +670,8 @@ impl BoardState {
         }
         // Put this after the first set because we want to replace the opponents piece
         self.white_to_move = !self.white_to_move;
+        // Swap the score to be relative to the new side to move
+        self.piece_square_score *= -1;
         if let Some(promotion) = play.promotion {
             match promotion {
                 Promotion::Queen => self.clear(play.ending_square, Some(PieceType::Queen)),
