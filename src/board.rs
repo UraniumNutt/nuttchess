@@ -1,5 +1,5 @@
 // use crate::Tables;
-use crate::eval::{get_piece_value, piece_square_score};
+use crate::eval::{delta_ps_score, get_piece_value, piece_square_score};
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,7 +139,7 @@ impl BoardState {
     }
 
     fn empty_state() -> BoardState {
-        BoardState {
+        let mut board = BoardState {
             white_pawns: 0,
             white_knights: 0,
             white_rooks: 0,
@@ -165,7 +165,10 @@ impl BoardState {
             piece_square_score: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
-        }
+        };
+
+        board.piece_square_score = piece_square_score(&board);
+        board
     }
 
     pub fn state_from_fen<'a>(
@@ -490,6 +493,10 @@ impl BoardState {
 
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
+        // Update piece square score
+        self.piece_square_score += delta_ps_score(self, play);
+        self.piece_square_score *= -1;
+
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
@@ -534,8 +541,6 @@ impl BoardState {
                 _ => return,
             }
             self.white_to_move = !self.white_to_move;
-            // Swap the score to be relative to the new side to move
-            self.piece_square_score *= -1;
             return;
         }
         self.push_state();
@@ -612,8 +617,6 @@ impl BoardState {
             self.en_passant_target = 0;
         }
         self.white_to_move = !self.white_to_move;
-        // Swap the score to be relative to the new side to move
-        self.piece_square_score *= -1;
     }
 
     // Reverts the move from the board. Pops from the move stack
@@ -623,8 +626,6 @@ impl BoardState {
         if play.promotion == Some(Promotion::Castle) {
             // Swap side to play first
             self.white_to_move = !self.white_to_move;
-            // Swap the score to be relative to the new side to move
-            self.piece_square_score *= -1;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
@@ -656,6 +657,9 @@ impl BoardState {
                 }
                 _ => return,
             }
+            // Update the piece square score
+            self.piece_square_score *= -1;
+            self.piece_square_score -= delta_ps_score(self, play);
             return;
         }
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
@@ -670,8 +674,6 @@ impl BoardState {
         }
         // Put this after the first set because we want to replace the opponents piece
         self.white_to_move = !self.white_to_move;
-        // Swap the score to be relative to the new side to move
-        self.piece_square_score *= -1;
         if let Some(promotion) = play.promotion {
             match promotion {
                 Promotion::Queen => self.clear(play.ending_square, Some(PieceType::Queen)),
@@ -684,6 +686,9 @@ impl BoardState {
             self.clear(play.ending_square, Some(play.moved_type));
         }
         self.set(play.starting_square, Some(play.moved_type));
+        // Update the piece square score
+        self.piece_square_score *= -1;
+        self.piece_square_score -= delta_ps_score(self, play);
     }
 
     // Clear all bitboards at this mask
