@@ -112,6 +112,20 @@ fn main() {
                     );
                     comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
                 }
+                "movetime" => {
+                    let starting_time = Instant::now();
+                    let ms = tokens.next().unwrap().parse::<u64>().unwrap();
+                    let mut node_count = 0;
+                    let best_move = id_search(
+                        &mut board,
+                        &tables,
+                        7,
+                        Some(starting_time),
+                        Some(ms as u128),
+                        &mut node_count,
+                    );
+                    comm.engine_out(format!("bestmove {}", best_move.to_string().unwrap()));
+                }
                 "depth" => {
                     let depth = tokens.next();
                     match depth {
