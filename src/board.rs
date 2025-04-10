@@ -1,4 +1,5 @@
 // use crate::Tables;
+use crate::eval::{delta_ps_score, get_piece_value, piece_square_score};
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,6 +26,7 @@ pub struct BoardState {
     pub en_passant_target: u64,
     pub reversable_move_counter: u8,
     pub full_move_counter: u16,
+    pub piece_square_score: isize,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
@@ -104,7 +106,7 @@ impl MoveStackFrame {
 
 impl BoardState {
     pub fn starting_state() -> BoardState {
-        BoardState {
+        let mut state = BoardState {
             white_pawns: 0xff00,
             white_knights: 0x42,
             white_rooks: 0x81,
@@ -127,13 +129,17 @@ impl BoardState {
             en_passant_target: 0x0,
             reversable_move_counter: 0,
             full_move_counter: 1,
+            piece_square_score: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
-        }
+        };
+
+        state.piece_square_score = piece_square_score(&state);
+        state
     }
 
     fn empty_state() -> BoardState {
-        BoardState {
+        let mut board = BoardState {
             white_pawns: 0,
             white_knights: 0,
             white_rooks: 0,
@@ -156,9 +162,13 @@ impl BoardState {
             en_passant_target: 0,
             reversable_move_counter: 0,
             full_move_counter: 0,
+            piece_square_score: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
-        }
+        };
+
+        board.piece_square_score = piece_square_score(&board);
+        board
     }
 
     pub fn state_from_fen<'a>(
@@ -483,6 +493,10 @@ impl BoardState {
 
     // Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
+        // Update piece square score
+        self.piece_square_score += delta_ps_score(self, play);
+        self.piece_square_score *= -1;
+
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
@@ -643,6 +657,9 @@ impl BoardState {
                 }
                 _ => return,
             }
+            // Update the piece square score
+            self.piece_square_score *= -1;
+            self.piece_square_score -= delta_ps_score(self, play);
             return;
         }
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
@@ -669,6 +686,9 @@ impl BoardState {
             self.clear(play.ending_square, Some(play.moved_type));
         }
         self.set(play.starting_square, Some(play.moved_type));
+        // Update the piece square score
+        self.piece_square_score *= -1;
+        self.piece_square_score -= delta_ps_score(self, play);
     }
 
     // Clear all bitboards at this mask
