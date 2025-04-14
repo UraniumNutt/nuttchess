@@ -131,8 +131,15 @@ fn main() {
                     match depth {
                         Some(d) => {
                             if let Ok(depth_number) = d.parse::<u64>() {
-                                let best_move =
-                                    negamax(&mut board, &tables, depth_number as usize, None, None);
+                                let mut test_counter = 0;
+                                let best_move = negamax(
+                                    &mut board,
+                                    &tables,
+                                    depth_number as usize,
+                                    None,
+                                    None,
+                                    &mut test_counter,
+                                );
                                 comm.engine_out(format!(
                                     "bestmove {}",
                                     best_move.unwrap().to_string().unwrap()

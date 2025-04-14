@@ -1,6 +1,3 @@
-use std::cmp::Ordering;
-use std::isize;
-use std::iter::zip;
 use std::time::Instant;
 
 use crate::board::*;
@@ -50,11 +47,13 @@ pub fn negamax(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
+    test_counter: &mut usize,
 ) -> Result<MoveRep, String> {
-    let mut max = isize::MIN;
-    // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut moves = generate(board, tables);
 
+    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
+
+    // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
     let mut beta = isize::MAX;
@@ -71,6 +70,7 @@ pub fn negamax(
             timer,
             duration,
             &mut node_count,
+            test_counter,
         )
         .saturating_neg();
         board.unmake(&mv);
@@ -95,8 +95,11 @@ fn negamax_child(
     timer: Option<Instant>,
     duration: Option<u128>,
     node_count: &mut usize,
+    test_counter: &mut usize,
 ) -> isize {
-    let moves = generate(board, tables);
+    let mut moves = generate(board, tables);
+
+    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
     if moves.len() == 0 {
         // println!("Zeros moves generated at a depth of {}", depth);
         // print_bitboard(board.occupancy());
@@ -127,12 +130,23 @@ fn negamax_child(
         *node_count += 1;
         // TODO Investigate delta pruning. The fact that depth limits greater than 2 dont really improve preformance suggests
         // that this is not really a great approach
-        return quiescence(board, tables, alpha, beta, 2, timer, duration, moves.len());
+        return quiescence(
+            board,
+            tables,
+            alpha,
+            beta,
+            10,
+            timer,
+            duration,
+            moves.len(),
+            test_counter,
+        );
     }
     for mv in &moves {
         match (timer, duration) {
             (Some(t), Some(d)) => {
                 if t.elapsed().as_millis() > d {
+                    // TODO Should this just break?
                     return DRAW;
                 }
             }
@@ -150,6 +164,7 @@ fn negamax_child(
             timer,
             duration,
             node_count,
+            test_counter,
         )
         .saturating_neg();
         board.unmake(&mv);
@@ -174,11 +189,19 @@ pub fn id_search(
     node_count: &mut usize,
 ) -> MoveRep {
     let mut current_depth = 1;
-    let mut best_move = negamax(board, tables, 1, None, None);
+    let mut test_counter = 0;
+    let mut best_move = negamax(board, tables, 1, None, None, &mut test_counter);
 
     loop {
         current_depth += 1;
-        let possible_best = negamax(board, tables, current_depth, timer, duration);
+        let possible_best = negamax(
+            board,
+            tables,
+            current_depth,
+            timer,
+            duration,
+            &mut test_counter,
+        );
         if !timer_check(timer, duration) {
             best_move = possible_best;
         } else {
@@ -199,8 +222,11 @@ fn quiescence(
     timer: Option<Instant>,
     duration: Option<u128>,
     last_number_moves: usize,
+    test_counter: &mut usize,
 ) -> isize {
-    let moves = generate(board, tables);
+    *test_counter += 1;
+    let mut moves = generate(board, tables);
+    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
     let number_moves = moves.len();
     let initial_eval = eval(board, tables, number_moves, last_number_moves);
     // TODO Investigate using delta pruning instead of an arbitrary depth limit
@@ -235,6 +261,7 @@ fn quiescence(
             timer,
             duration,
             number_moves,
+            test_counter,
         )
         .saturating_neg();
         board.unmake(&mv);
