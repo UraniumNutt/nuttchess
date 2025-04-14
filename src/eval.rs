@@ -1,5 +1,3 @@
-use std::path::StripPrefixError;
-
 use crate::board::*;
 use crate::generate::*;
 use crate::tables::*;
@@ -385,6 +383,47 @@ pub fn delta_ps_score(board: &BoardState, mv: &MoveRep) -> isize {
             score
         }
     }
+}
+
+/// Score a MoveRep for use in move ordering
+pub fn score(mv: &MoveRep, board: &BoardState) -> isize {
+    fn value_match(pt: PieceType) -> isize {
+        match pt {
+            PieceType::Pawn => PAWN,
+            PieceType::Knight => KNIGHT,
+            PieceType::Bishop => BISHOP,
+            PieceType::Rook => ROOK,
+            PieceType::Queen => QUEEN,
+            PieceType::King => KING,
+        }
+    }
+
+    let mut score = 0;
+    // Encourage attacking
+    if let Some(target) = mv.attacked_type {
+        let target_value = value_match(target);
+        let attacker_value = value_match(mv.moved_type);
+        score += 10 * target_value - attacker_value;
+    }
+
+    // Encourage promotion
+    if let Some(promotion) = mv.promotion {
+        score += match promotion {
+            Promotion::Queen => QUEEN,
+            Promotion::Rook => ROOK,
+            Promotion::Bishop => BISHOP,
+            Promotion::Knight => KNIGHT,
+            _ => 0,
+        };
+    }
+
+    // TODO We need to do this in a way that does not require re computing the masks
+    // // Discourage getting attacked
+    // if mv.ending_square & enemy_attack_mask != 0 {
+    //     score -= value_match(mv.moved_type);
+    // }
+
+    score
 }
 
 #[cfg(test)]
