@@ -418,7 +418,7 @@ pub fn score(mv: &MoveRep, board: &BoardState) -> isize {
     }
 
     // TODO We need to do this in a way that does not require re computing the masks
-    // // Discourage getting attacked
+    // Discourage getting attacked
     // if mv.ending_square & enemy_attack_mask != 0 {
     //     score -= value_match(mv.moved_type);
     // }

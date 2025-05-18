@@ -4,6 +4,7 @@ mod eval;
 mod generate;
 mod search;
 pub mod tables;
+mod tt;
 use crate::board::*;
 use crate::comm::*;
 use crate::tables::*;

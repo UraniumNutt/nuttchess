@@ -1,5 +1,6 @@
 // use crate::Tables;
 use crate::eval::{delta_ps_score, get_piece_value, piece_square_score};
+use crate::tt::ZobKeys;
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +28,7 @@ pub struct BoardState {
     pub reversable_move_counter: u8,
     pub full_move_counter: u16,
     pub piece_square_score: isize,
+    pub hash: u64,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
@@ -130,10 +132,14 @@ impl BoardState {
             reversable_move_counter: 0,
             full_move_counter: 1,
             piece_square_score: 0,
+            hash: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         };
-
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        state.hash = zob_keys.generate_hash(&state);
         state.piece_square_score = piece_square_score(&state);
         state
     }
@@ -163,10 +169,15 @@ impl BoardState {
             reversable_move_counter: 0,
             full_move_counter: 0,
             piece_square_score: 0,
+            hash: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         };
 
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        board.hash = zob_keys.generate_hash(&board);
         board.piece_square_score = piece_square_score(&board);
         board
     }
@@ -491,7 +502,7 @@ impl BoardState {
         self.black_kingside_castle_rights = frame.black_kingside_castle_rights;
     }
 
-    // Changes the board state to reflect the move. Also pushes to the move stack
+    /// Changes the board state to reflect the move. Also pushes to the move stack
     pub fn make(&mut self, play: &MoveRep) {
         // Update piece square score
         self.piece_square_score += delta_ps_score(self, play);
@@ -619,7 +630,7 @@ impl BoardState {
         self.white_to_move = !self.white_to_move;
     }
 
-    // Reverts the move from the board. Pops from the move stack
+    /// Reverts the move from the board. Pops from the move stack
     pub fn unmake(&mut self, play: &MoveRep) {
         self.pop_state();
         // If the move to unmake is castling do this and return
@@ -945,6 +956,30 @@ impl BoardState {
             attack_mask |= tables.king_attacks[start_square];
         }
 
+        attack_mask
+    }
+
+    // Get the pawn attack mask of white
+    pub fn white_pawn_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.white_pawn_attacks[start_square];
+        }
+        attack_mask
+    }
+
+    // Get the pawn attack mask of black
+    pub fn black_pawn_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.black_pawn_attacks[start_square];
+        }
         attack_mask
     }
 
