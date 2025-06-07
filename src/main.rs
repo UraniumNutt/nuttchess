@@ -15,6 +15,7 @@ use std::env;
 use std::path::Path;
 use std::time;
 use std::time::Instant;
+use tt::ZobKeys;
 
 fn main() {
     let mut running = true;
@@ -23,6 +24,7 @@ fn main() {
 
     let mut board = BoardState::starting_state();
     let tables = Tables::new();
+    let zob_keys = ZobKeys::new();
     while running {
         let line = comm.engine_in();
         let mut tokens = line.split(" ");
@@ -41,7 +43,7 @@ fn main() {
                     board = BoardState::starting_state();
                     if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
-                            board.apply_string_move(mv.to_string());
+                            board.apply_string_move(mv.to_string(), &zob_keys);
                         }
                     }
                 }
@@ -57,7 +59,7 @@ fn main() {
                     }
                     if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
-                            board.apply_string_move(mv.to_string());
+                            board.apply_string_move(mv.to_string(), &zob_keys);
                         }
                     }
                 }
@@ -73,7 +75,7 @@ fn main() {
                     match depth {
                         Some(d) => {
                             if let Ok(parsed_d) = d.parse::<u64>() {
-                                perft(&mut board, parsed_d as usize);
+                                perft(&mut board, parsed_d as usize, &zob_keys);
                             } else {
                                 comm.engine_out(format!(
                                     "Error parsing value of depth token {}",
@@ -106,6 +108,7 @@ fn main() {
                     let best_move = id_search(
                         &mut board,
                         &tables,
+                        &zob_keys,
                         7,
                         Some(starting_time),
                         Some(time_to_spend),
@@ -120,6 +123,7 @@ fn main() {
                     let best_move = id_search(
                         &mut board,
                         &tables,
+                        &zob_keys,
                         7,
                         Some(starting_time),
                         Some(ms as u128),
@@ -136,6 +140,7 @@ fn main() {
                                 let best_move = negamax(
                                     &mut board,
                                     &tables,
+                                    &zob_keys,
                                     depth_number as usize,
                                     None,
                                     None,

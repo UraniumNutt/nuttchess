@@ -363,7 +363,7 @@ impl BoardState {
         }
     }
 
-    pub fn apply_string_move(&mut self, play: String) {
+    pub fn apply_string_move(&mut self, play: String, zob_keys: &ZobKeys) {
         let char1 = play.chars().nth(0).unwrap();
         let char2 = play.chars().nth(1).unwrap();
         let char3 = play.chars().nth(2).unwrap();
@@ -418,7 +418,7 @@ impl BoardState {
             move_rep.promotion = Some(Promotion::Castle);
         }
 
-        self.make(&move_rep);
+        self.make(&move_rep, zob_keys);
     }
 
     /// Prints the board in an easy to understand way
@@ -503,7 +503,7 @@ impl BoardState {
     }
 
     /// Changes the board state to reflect the move. Also pushes to the move stack
-    pub fn make(&mut self, play: &MoveRep) {
+    pub fn make(&mut self, play: &MoveRep, zob_keys: &ZobKeys) {
         // Update piece square score
         self.piece_square_score += delta_ps_score(self, play);
         self.piece_square_score *= -1;
@@ -631,7 +631,7 @@ impl BoardState {
     }
 
     /// Reverts the move from the board. Pops from the move stack
-    pub fn unmake(&mut self, play: &MoveRep) {
+    pub fn unmake(&mut self, play: &MoveRep, zob_keys: &ZobKeys) {
         self.pop_state();
         // If the move to unmake is castling do this and return
         if play.promotion == Some(Promotion::Castle) {
@@ -1569,13 +1569,18 @@ impl BoardState {
     }
 
     // Checks that the move will not result in check
-    pub fn move_safe_for_king(&mut self, table: &Tables, play: &MoveRep) -> bool {
-        self.make(&play);
+    pub fn move_safe_for_king(
+        &mut self,
+        table: &Tables,
+        play: &MoveRep,
+        zob_keys: &ZobKeys,
+    ) -> bool {
+        self.make(&play, zob_keys);
         let is_safe = !match self.white_to_move {
             true => self.black_in_check(&table),
             false => self.white_in_check(&table),
         };
-        self.unmake(&play);
+        self.unmake(&play, zob_keys);
         is_safe
     }
 }
@@ -1812,8 +1817,8 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        pawn_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        pawn_test.make(&move_test, &zob_keys);
 
         assert_eq!(pawn_test.white_to_move, false);
         assert_eq!(pawn_test.white_pawns & 1 << Tables::A4 != 0, true);
@@ -1834,7 +1839,8 @@ mod tests {
             attacked_type: None,
         };
 
-        black_pawn_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_pawn_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_pawn_test.white_to_move, true);
         assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D7 != 0, false);
@@ -1855,7 +1861,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        black_pawn_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_pawn_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_pawn_attack_test.white_to_move, true);
         assert_eq!(
@@ -1886,7 +1893,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        pawn_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        pawn_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(pawn_attack_test.white_to_move, false);
         assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::B2 != 0, false);
@@ -1908,7 +1916,8 @@ mod tests {
             attacked_type: None,
         };
 
-        knight_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        knight_test.make(&move_test, &zob_keys);
 
         assert_eq!(knight_test.white_to_move, false);
         assert_eq!(knight_test.white_knights & 1 << Tables::A3 != 0, true);
@@ -1929,7 +1938,8 @@ mod tests {
             attacked_type: None,
         };
 
-        black_knight_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_knight_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_knight_test.white_to_move, true);
         assert_eq!(
@@ -1953,7 +1963,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        white_knight_attack.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        white_knight_attack.make(&move_test, &zob_keys);
 
         assert_eq!(white_knight_attack.white_to_move, false);
         assert_eq!(
@@ -1984,7 +1995,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        black_knight_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_knight_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_knight_attack_test.white_to_move, true);
         assert_eq!(
@@ -2015,7 +2027,8 @@ mod tests {
             attacked_type: None,
         };
 
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
@@ -2035,8 +2048,8 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
@@ -2056,8 +2069,8 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
@@ -2079,7 +2092,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
@@ -2100,9 +2114,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
@@ -2122,9 +2136,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
@@ -2146,9 +2160,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_pawns & 1 << Tables::H7 != 0, true);
@@ -2168,9 +2182,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_pawns & 1 << Tables::B7 != 0, true);
@@ -2191,9 +2205,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
@@ -2213,9 +2227,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
@@ -2236,9 +2250,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
@@ -2258,9 +2272,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
@@ -2281,9 +2295,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
@@ -2303,9 +2317,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
@@ -2326,9 +2340,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
@@ -2348,9 +2362,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
@@ -2708,7 +2722,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(true, result);
     }
 
@@ -2725,7 +2740,8 @@ mod tests {
             PieceType::King,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(false, result);
     }
 
@@ -2742,7 +2758,8 @@ mod tests {
             PieceType::King,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(true, result);
     }
 
@@ -2759,7 +2776,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(false, result);
     }
 
@@ -2852,15 +2870,15 @@ mod tests {
             PieceType::Knight,
             None,
         );
-
+        let zob_keys = ZobKeys::new();
         assert_eq!(board.en_passant_target, 0);
-        board.make(&mv_1);
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::B3);
-        board.make(&mv_2);
+        board.make(&mv_2, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
-        board.unmake(&mv_2);
+        board.unmake(&mv_2, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::B3);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2876,9 +2894,10 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2894,7 +2913,8 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2912,9 +2932,10 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::E6);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2974,10 +2995,11 @@ mod tests {
             Some(PieceType::Pawn),
         );
 
-        board.make(&expected_mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&expected_mv, &zob_keys);
         print_bitboard(board.occupancy());
         assert_eq!(board.black_pawns, 0xbf000000000000);
-        board.unmake(&expected_mv);
+        board.unmake(&expected_mv, &zob_keys);
         assert_eq!(board.black_pawns, 0xbf004000000000);
     }
 
@@ -3141,13 +3163,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::G1);
         assert_eq!(board.white_rooks & 1 << Tables::F1, 1 << Tables::F1);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::H1, 1 << Tables::H1);
         assert_eq!(board.white_kingside_castle_rights, true);
@@ -3166,13 +3189,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::C1);
         assert_eq!(board.white_rooks & 1 << Tables::D1, 1 << Tables::D1);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::A1, 1 << Tables::A1);
         assert_eq!(board.white_kingside_castle_rights, true);
@@ -3191,13 +3215,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::G8);
         assert_eq!(board.black_rooks & 1 << Tables::F8, 1 << Tables::F8);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::H8, 1 << Tables::H8);
         assert_eq!(board.black_kingside_castle_rights, true);
@@ -3216,13 +3241,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::C8);
         assert_eq!(board.black_rooks & 1 << Tables::D8, 1 << Tables::D8);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::A8, 1 << Tables::A8);
         assert_eq!(board.black_kingside_castle_rights, true);
@@ -3242,8 +3268,8 @@ mod tests {
             PieceType::Rook,
             None,
         );
-
-        board.make(&kingside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&kingside_rook_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, true);
     }
@@ -3262,7 +3288,8 @@ mod tests {
             None,
         );
 
-        board.make(&queenside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&queenside_rook_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, true);
         assert_eq!(board.white_queenside_castle_rights, false);
     }
@@ -3281,7 +3308,8 @@ mod tests {
             None,
         );
 
-        board.make(&king_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&king_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
     }
@@ -3300,7 +3328,8 @@ mod tests {
             None,
         );
 
-        board.make(&kingside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&kingside_rook_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, true);
     }
@@ -3319,7 +3348,8 @@ mod tests {
             None,
         );
 
-        board.make(&queenside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&queenside_rook_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, true);
         assert_eq!(board.black_queenside_castle_rights, false);
     }
@@ -3338,7 +3368,8 @@ mod tests {
             None,
         );
 
-        board.make(&king_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&king_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
     }
@@ -3357,7 +3388,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_queens, 1 << Tables::D1 | 1 << Tables::H8);
         assert_eq!(board.white_pawns & 1 << Tables::H8, 0);
     }

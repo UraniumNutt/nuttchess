@@ -429,7 +429,7 @@ pub fn score(mv: &MoveRep, board: &BoardState) -> isize {
 #[cfg(test)]
 mod tests {
 
-    use crate::search::perft;
+    use crate::{search::perft, tt::ZobKeys};
 
     use super::*;
 
@@ -450,11 +450,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 40);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -476,11 +477,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 40);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -502,11 +504,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 50);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -528,11 +531,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 50);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -554,11 +558,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 45);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -580,11 +585,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -5);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -606,11 +612,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 20);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -632,11 +639,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 0);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -658,11 +666,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 10);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -684,11 +693,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -5);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -710,11 +720,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 5);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -736,11 +747,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 5);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -762,11 +774,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 10);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -788,11 +801,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -20);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -813,11 +827,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -20);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -838,11 +853,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 10);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -864,11 +880,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 30);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -890,11 +907,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 0);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -915,11 +933,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -55);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -940,11 +959,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -50);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -965,11 +985,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, -55);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -991,11 +1012,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 30);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -1017,11 +1039,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 15);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -1043,11 +1066,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 30);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -1069,11 +1093,12 @@ mod tests {
         let delta_score = delta_ps_score(&board, &mv);
         assert_eq!(delta_score, 15);
         let init_score = piece_square_score(&board);
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         let final_score = piece_square_score(&board);
         // The final score is a diffrent sign because the side to move is diffrent
         assert_eq!(delta_score, -(init_score + final_score));
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         let revert_score = piece_square_score(&board);
         assert_eq!(init_score, revert_score);
     }
@@ -1082,7 +1107,8 @@ mod tests {
     fn dps_balanced() {
         let mut board = BoardState::starting_state();
         let init_score = board.piece_square_score;
-        let _ = perft(&mut board, 5);
+        let zob_keys = ZobKeys::new();
+        let _ = perft(&mut board, 5, &zob_keys);
         assert_eq!(board.piece_square_score, init_score);
     }
 }
