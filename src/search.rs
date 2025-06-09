@@ -190,7 +190,7 @@ fn negamax_child(
     return alpha;
 }
 
-/// Preformes a search using iterative deepening
+/// Preforms a search using iterative deepening
 pub fn id_search(
     board: &mut BoardState,
     tables: &Tables,

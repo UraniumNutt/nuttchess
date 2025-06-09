@@ -343,6 +343,11 @@ impl BoardState {
             return Err("String does not have enough tokens to be a valid fen string".to_string());
         }
 
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        state.hash = zob_keys.generate_hash(&state);
+        state.piece_square_score = piece_square_score(&state);
         Ok(state)
     }
 
@@ -475,7 +480,7 @@ impl BoardState {
         print!("\n");
     }
 
-    /// Pushes the current nonreversible state to the stack
+    /// Pushes the current non reversible state to the stack
     fn push_state(&mut self) {
         let mut frame = MoveStackFrame::new();
         frame.en_passant_target = self.en_passant_target;
@@ -489,7 +494,7 @@ impl BoardState {
         self.move_stack_pointer += 1;
     }
 
-    /// Pops the nonreversible state from the stack
+    /// Pops the non reversible state from the stack
     fn pop_state(&mut self) {
         self.move_stack_pointer -= 1;
         let frame = self.move_stack.pop().unwrap();
@@ -511,105 +516,246 @@ impl BoardState {
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
+            // If there was an enpassant target, clear it from the hash
+            if self.en_passant_target != 0 {
+                self.hash ^=
+                    zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            }
+
             self.en_passant_target = 0;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::H1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::H1 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::F1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::F1 as usize];
+
                     self.white_queenside_castle_rights = false;
                     self.white_kingside_castle_rights = false;
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::A1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::A1 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::D1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::D1 as usize];
+
                     self.white_queenside_castle_rights = false;
                     self.white_kingside_castle_rights = false;
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::H8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::H8 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::F8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::F8 as usize];
+
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::A8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::A8 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::D8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::D8 as usize];
+
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                 }
                 _ => return,
             }
             self.white_to_move = !self.white_to_move;
+            self.hash ^= zob_keys.side_key;
             return;
         }
         self.push_state();
         self.clear(play.starting_square, Some(play.moved_type));
+        self.hash ^= zob_keys.piece_keys
+            [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+            [play.starting_square.trailing_zeros() as usize];
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
             match self.white_to_move {
-                true => self.clear_all(play.ending_square >> 8),
-                false => self.clear_all(play.ending_square << 8),
+                true => {
+                    // TODO clear_all is the ugly result of a architectural mistake. Fix this!
+                    self.clear_all(play.ending_square >> 8);
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_PAWN_INDEX]
+                        [(play.ending_square >> 8).trailing_zeros() as usize];
+                }
+                false => {
+                    // TODO clear_all is the ugly result of a architectural mistake. Fix this!
+                    self.clear_all(play.ending_square << 8);
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_PAWN_INDEX]
+                        [(play.ending_square << 8).trailing_zeros() as usize];
+                }
             }
         } else {
             // Normal attack clear
+            // TODO clear_all is the ugly result of a architectural mistake. Fix this!
             self.clear_all(play.ending_square);
+            if let Some(attacked) = play.attacked_type {
+                self.hash ^= zob_keys.piece_keys
+                    [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                    [play.ending_square.trailing_zeros() as usize];
+            }
             // If the attacked piece was a rook, remove the relevent castling rights
             if play.ending_square == 1 << Tables::A1 && self.white_queenside_castle_rights {
                 self.white_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::H1 && self.white_kingside_castle_rights {
                 self.white_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::A8 && self.black_queenside_castle_rights {
                 self.black_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::H8 && self.black_kingside_castle_rights {
                 self.black_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
         }
         // Promotion logic
         if let Some(promotion) = play.promotion {
             match promotion {
-                Promotion::Queen => self.set(play.ending_square, Some(PieceType::Queen)),
-                Promotion::Rook => self.set(play.ending_square, Some(PieceType::Rook)),
-                Promotion::Bishop => self.set(play.ending_square, Some(PieceType::Bishop)),
-                Promotion::Knight => self.set(play.ending_square, Some(PieceType::Knight)),
+                Promotion::Queen => {
+                    self.set(play.ending_square, Some(PieceType::Queen));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Queen, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Rook => {
+                    self.set(play.ending_square, Some(PieceType::Rook));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Rook, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Bishop => {
+                    self.set(play.ending_square, Some(PieceType::Bishop));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Bishop, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Knight => {
+                    self.set(play.ending_square, Some(PieceType::Knight));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Knight, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
                 _ => {}
             }
         } else {
             self.set(play.ending_square, Some(play.moved_type));
+            self.hash ^= zob_keys.piece_keys
+                [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+                [play.ending_square.trailing_zeros() as usize];
         }
         // Do special logic here
         // If the move is not castling, but can effect castling rights, change the rights here
         if play.moved_type == PieceType::Rook {
             if self.white_queenside_castle_rights && play.starting_square == 1 << Tables::A1 {
                 self.white_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
             }
             if self.white_kingside_castle_rights && play.starting_square == 1 << Tables::H1 {
                 self.white_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
             }
             if self.black_queenside_castle_rights && play.starting_square == 1 << Tables::A8 {
                 self.black_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
             }
             if self.black_kingside_castle_rights && play.starting_square == 1 << Tables::H8 {
                 self.black_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
         }
         if play.moved_type == PieceType::King && play.promotion == None {
             if self.white_to_move {
+                if self.white_queenside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                }
                 self.white_queenside_castle_rights = false;
+                if self.white_kingside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                }
                 self.white_kingside_castle_rights = false;
             } else {
+                if self.black_queenside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                }
                 self.black_queenside_castle_rights = false;
+                if self.black_kingside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                }
                 self.black_kingside_castle_rights = false;
             }
         }
@@ -621,50 +767,135 @@ impl BoardState {
                     && play.ending_square & Tables::RANK_5 != 0)
         {
             self.en_passant_target = match self.white_to_move {
-                true => play.starting_square << 8,
-                false => play.starting_square >> 8,
+                true => {
+                    self.hash ^= zob_keys.enpassant_keys
+                        [(play.starting_square << 8).trailing_zeros() as usize];
+                    play.starting_square << 8
+                }
+                false => {
+                    self.hash ^= zob_keys.enpassant_keys
+                        [(play.starting_square >> 8).trailing_zeros() as usize];
+                    play.starting_square >> 8
+                }
             }
         } else {
+            if self.en_passant_target != 0 {
+                self.hash ^=
+                    zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            }
             self.en_passant_target = 0;
         }
+        self.hash ^= zob_keys.side_key;
         self.white_to_move = !self.white_to_move;
     }
 
     /// Reverts the move from the board. Pops from the move stack
     pub fn unmake(&mut self, play: &MoveRep, zob_keys: &ZobKeys) {
+        let previous_castle_rights = (
+            self.move_stack[self.move_stack_pointer - 1].white_queenside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].white_kingside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].black_queenside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].black_kingside_castle_rights,
+        );
+        let previous_en_passant = self.move_stack[self.move_stack_pointer - 1].en_passant_target;
         self.pop_state();
+        // TODO This might be able to be improved by using 16 castle hashes instead of 4
+        if self.white_queenside_castle_rights != previous_castle_rights.0 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+        }
+        if self.white_kingside_castle_rights != previous_castle_rights.1 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+        }
+        if self.black_queenside_castle_rights != previous_castle_rights.2 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+        }
+        if self.black_kingside_castle_rights != previous_castle_rights.3 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+        }
+
+        if self.en_passant_target != previous_en_passant {
+            self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            if previous_en_passant != 0 {
+                self.hash ^= zob_keys.enpassant_keys[previous_en_passant.trailing_zeros() as usize];
+            }
+        }
         // If the move to unmake is castling do this and return
         if play.promotion == Some(Promotion::Castle) {
             // Swap side to play first
             self.white_to_move = !self.white_to_move;
+            self.hash ^= zob_keys.side_key;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KINGSIDE_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::H1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::H1 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KINGSIDE_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::F1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::F1 as usize];
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_QUEENSIDE_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::A1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::A1 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_QUEENSIDE_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::D1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::D1 as usize];
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KINGSIDE_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::H8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::H8 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KINGSIDE_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::F8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::F8 as usize];
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_QUEENSIDE_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::A8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::A8 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_QUEENSIDE_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::D8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::D8 as usize];
                 }
                 _ => return,
             }
@@ -675,28 +906,74 @@ impl BoardState {
         }
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
-            // Remember, we have not switch the side to move back yet
+            // Remember, we have not switched the side to move back yet
             match !self.white_to_move {
-                true => self.set(play.ending_square >> 8, play.attacked_type),
-                false => self.set(play.ending_square << 8, play.attacked_type),
+                true => {
+                    self.set(play.ending_square >> 8, play.attacked_type);
+                    if let Some(attacked) = play.attacked_type {
+                        self.hash ^= zob_keys.piece_keys
+                            [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                            [(play.ending_square >> 8).trailing_zeros() as usize];
+                    }
+                }
+                false => {
+                    self.set(play.ending_square << 8, play.attacked_type);
+                    if let Some(attacked) = play.attacked_type {
+                        self.hash ^= zob_keys.piece_keys
+                            [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                            [(play.ending_square << 8).trailing_zeros() as usize];
+                    }
+                }
             }
         } else {
             self.set(play.ending_square, play.attacked_type);
+            if let Some(attacked) = play.attacked_type {
+                self.hash ^= zob_keys.piece_keys
+                    [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                    [play.ending_square.trailing_zeros() as usize];
+            }
         }
         // Put this after the first set because we want to replace the opponents piece
         self.white_to_move = !self.white_to_move;
+        self.hash ^= zob_keys.side_key;
         if let Some(promotion) = play.promotion {
             match promotion {
-                Promotion::Queen => self.clear(play.ending_square, Some(PieceType::Queen)),
-                Promotion::Rook => self.clear(play.ending_square, Some(PieceType::Rook)),
-                Promotion::Bishop => self.clear(play.ending_square, Some(PieceType::Bishop)),
-                Promotion::Knight => self.clear(play.ending_square, Some(PieceType::Knight)),
+                Promotion::Queen => {
+                    self.clear(play.ending_square, Some(PieceType::Queen));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Queen, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Rook => {
+                    self.clear(play.ending_square, Some(PieceType::Rook));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Rook, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Bishop => {
+                    self.clear(play.ending_square, Some(PieceType::Bishop));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Bishop, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Knight => {
+                    self.clear(play.ending_square, Some(PieceType::Knight));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Knight, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
                 _ => {}
             }
         } else {
             self.clear(play.ending_square, Some(play.moved_type));
+            self.hash ^= zob_keys.piece_keys
+                [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+                [play.ending_square.trailing_zeros() as usize];
         }
         self.set(play.starting_square, Some(play.moved_type));
+        self.hash ^= zob_keys.piece_keys
+            [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+            [play.starting_square.trailing_zeros() as usize];
         // Update the piece square score
         self.piece_square_score *= -1;
         self.piece_square_score -= delta_ps_score(self, play);

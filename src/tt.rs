@@ -16,6 +16,24 @@ pub struct ZobKeys {
 }
 
 impl ZobKeys {
+    pub const WHITE_PAWN_INDEX: usize = 0;
+    pub const WHITE_KNIGHT_INDEX: usize = 1;
+    pub const WHITE_BISHOP_INDEX: usize = 2;
+    pub const WHITE_ROOK_INDEX: usize = 3;
+    pub const WHITE_QUEEN_INDEX: usize = 4;
+    pub const WHITE_KING_INDEX: usize = 5;
+    pub const BLACK_PAWN_INDEX: usize = 6;
+    pub const BLACK_KNIGHT_INDEX: usize = 7;
+    pub const BLACK_BISHOP_INDEX: usize = 8;
+    pub const BLACK_ROOK_INDEX: usize = 9;
+    pub const BLACK_QUEEN_INDEX: usize = 10;
+    pub const BLACK_KING_INDEX: usize = 11;
+
+    pub const WHITE_KINGSIDE_INDEX: usize = 0;
+    pub const WHITE_QUEENSIDE_INDEX: usize = 1;
+    pub const BLACK_KINGSIDE_INDEX: usize = 2;
+    pub const BLACK_QUEENSIDE_INDEX: usize = 3;
+
     pub fn new() -> ZobKeys {
         let mut keys = ZobKeys {
             piece_keys: [[0; 64]; 12],
@@ -48,6 +66,24 @@ impl ZobKeys {
         keys.side_key = rng.next_u64();
 
         keys
+    }
+
+    /// Match the piece and side to move to the index
+    pub fn match_to_index(piece: PieceType, white_to_move: bool) -> usize {
+        match (piece, white_to_move) {
+            (PieceType::Pawn, true) => ZobKeys::WHITE_PAWN_INDEX,
+            (PieceType::Knight, true) => ZobKeys::WHITE_KNIGHT_INDEX,
+            (PieceType::Bishop, true) => ZobKeys::WHITE_BISHOP_INDEX,
+            (PieceType::Rook, true) => ZobKeys::WHITE_ROOK_INDEX,
+            (PieceType::Queen, true) => ZobKeys::WHITE_QUEEN_INDEX,
+            (PieceType::King, true) => ZobKeys::WHITE_KING_INDEX,
+            (PieceType::Pawn, false) => ZobKeys::BLACK_PAWN_INDEX,
+            (PieceType::Knight, false) => ZobKeys::BLACK_KNIGHT_INDEX,
+            (PieceType::Bishop, false) => ZobKeys::BLACK_BISHOP_INDEX,
+            (PieceType::Rook, false) => ZobKeys::BLACK_ROOK_INDEX,
+            (PieceType::Queen, false) => ZobKeys::BLACK_QUEEN_INDEX,
+            (PieceType::King, false) => ZobKeys::BLACK_KING_INDEX,
+        }
     }
 
     /// Initially generate a hash from a board state
@@ -100,44 +136,59 @@ impl ZobKeys {
 
 #[cfg(test)]
 mod tests {
-    use crate::board::MoveRep;
+    use crate::{board::MoveRep, tables::Tables};
 
     use super::*;
 
-    // #[test]
-    // fn print_keys() {
-    //     let keys = ZobKeys::new();
+    #[test]
+    fn pawn_move_hash() {
+        let mut starting_board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let mut final_board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".to_string(),
+        );
+        let zob_keys = &ZobKeys::new();
+        let initial_hash = starting_board.hash;
+        let final_hash = final_board.hash;
 
-    //     for square in 0..64 {
-    //         for piece_index in 0..12 {
-    //             println!("{:#018x}", keys.piece_keys[piece_index][square]);
-    //         }
-    //     }
+        let mv = MoveRep::new(
+            1 << Tables::E2,
+            1 << Tables::E4,
+            None,
+            PieceType::Pawn,
+            None,
+        );
 
-    //     for square in 0..64 {
-    //         println!("{:#018x}", keys.enpassant_keys[square]);
-    //     }
+        starting_board.make(&mv, zob_keys);
+        assert_eq!(starting_board.hash, final_hash);
+        starting_board.unmake(&mv, zob_keys);
+        assert_eq!(starting_board.hash, initial_hash);
+    }
 
-    //     for castle_state in 0..4 {
-    //         println!("{:#018x}", keys.castle_keys[castle_state]);
-    //     }
+    #[test]
+    fn knight_move_hash() {
+        let mut starting_board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        );
+        let mut final_board = BoardState::state_from_string_fen(
+            "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 0 1".to_string(),
+        );
+        let zob_keys = &ZobKeys::new();
+        let initial_hash = starting_board.hash;
+        let final_hash = final_board.hash;
 
-    //     println!("{:#018x}", keys.side_key);
+        let mv = MoveRep::new(
+            1 << Tables::G1,
+            1 << Tables::F3,
+            None,
+            PieceType::Knight,
+            None,
+        );
 
-    //     panic!();
-    // }
-    //
-    // #[test]
-    // fn gen_key() {
-    //     let keys = ZobKeys::new();
-    //     let board = BoardState::starting_state();
-    //     let generated_hash = keys.generate_hash(&board);
-    //     println!("{:#018x}", generated_hash);
-    //     let board2 = BoardState::state_from_string_fen(
-    //         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
-    //     );
-    //     let hash2 = keys.generate_hash(&board2);
-    //     println!("{:#018x}", hash2);
-    //     panic!();
-    // }
+        starting_board.make(&mv, zob_keys);
+        assert_eq!(starting_board.hash, final_hash);
+        starting_board.unmake(&mv, zob_keys);
+        assert_eq!(starting_board.hash, initial_hash);
+    }
 }

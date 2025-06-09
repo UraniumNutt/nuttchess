@@ -241,7 +241,7 @@ pub fn get_piece_value(board: &BoardState, mask: u64) -> isize {
     }
 }
 
-/// Get the delta piece square score from a MoveRep
+/// Get the delta piece square score from a `MoveRep`
 pub fn delta_ps_score(board: &BoardState, mv: &MoveRep) -> isize {
     let mut score = 0;
     match mv.promotion {
@@ -385,7 +385,7 @@ pub fn delta_ps_score(board: &BoardState, mv: &MoveRep) -> isize {
     }
 }
 
-/// Score a MoveRep for use in move ordering
+/// Score a `MoveRep` for use in move ordering
 pub fn score(mv: &MoveRep, board: &BoardState) -> isize {
     fn value_match(pt: PieceType) -> isize {
         match pt {
