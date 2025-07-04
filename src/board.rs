@@ -542,14 +542,14 @@ impl BoardState {
                     self.hash ^=
                         zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::F1 as usize];
 
-                    self.white_queenside_castle_rights = false;
-                    self.white_kingside_castle_rights = false;
                     if self.white_queenside_castle_rights {
                         self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
                     }
                     if self.white_kingside_castle_rights {
                         self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
                     }
+                    self.white_queenside_castle_rights = false;
+                    self.white_kingside_castle_rights = false;
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
@@ -569,14 +569,14 @@ impl BoardState {
                     self.hash ^=
                         zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::D1 as usize];
 
-                    self.white_queenside_castle_rights = false;
-                    self.white_kingside_castle_rights = false;
                     if self.white_queenside_castle_rights {
                         self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
                     }
                     if self.white_kingside_castle_rights {
                         self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
                     }
+                    self.white_queenside_castle_rights = false;
+                    self.white_kingside_castle_rights = false;
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
@@ -596,14 +596,14 @@ impl BoardState {
                     self.hash ^=
                         zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::F8 as usize];
 
+                    if self.black_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                    }
+                    if self.black_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                    }
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
-                    if self.white_queenside_castle_rights {
-                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
-                    }
-                    if self.white_kingside_castle_rights {
-                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
-                    }
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
@@ -623,14 +623,14 @@ impl BoardState {
                     self.hash ^=
                         zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::D8 as usize];
 
+                    if self.black_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                    }
+                    if self.black_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                    }
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
-                    if self.white_queenside_castle_rights {
-                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
-                    }
-                    if self.white_kingside_castle_rights {
-                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
-                    }
                 }
                 _ => return,
             }
@@ -835,7 +835,7 @@ impl BoardState {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
                     self.set(play.starting_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KINGSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
                         [play.starting_square.trailing_zeros() as usize];
 
                     self.set(1 << Tables::H1, Some(PieceType::Rook));
@@ -843,7 +843,7 @@ impl BoardState {
                         zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::H1 as usize];
 
                     self.clear(play.ending_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KINGSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
                         [play.ending_square.trailing_zeros() as usize];
 
                     self.clear(1 << Tables::F1, Some(PieceType::Rook));
@@ -853,7 +853,7 @@ impl BoardState {
                 e if e == 1 << Tables::C1 => {
                     // White queenside
                     self.set(play.starting_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_QUEENSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
                         [play.starting_square.trailing_zeros() as usize];
 
                     self.set(1 << Tables::A1, Some(PieceType::Rook));
@@ -861,7 +861,7 @@ impl BoardState {
                         zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::A1 as usize];
 
                     self.clear(play.ending_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_QUEENSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
                         [play.ending_square.trailing_zeros() as usize];
 
                     self.clear(1 << Tables::D1, Some(PieceType::Rook));
@@ -871,7 +871,7 @@ impl BoardState {
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
                     self.set(play.starting_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KINGSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
                         [play.starting_square.trailing_zeros() as usize];
 
                     self.set(1 << Tables::H8, Some(PieceType::Rook));
@@ -879,7 +879,7 @@ impl BoardState {
                         zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::H8 as usize];
 
                     self.clear(play.ending_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KINGSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
                         [play.ending_square.trailing_zeros() as usize];
 
                     self.clear(1 << Tables::F8, Some(PieceType::Rook));
@@ -889,7 +889,7 @@ impl BoardState {
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
                     self.set(play.starting_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_QUEENSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
                         [play.starting_square.trailing_zeros() as usize];
 
                     self.set(1 << Tables::A8, Some(PieceType::Rook));
@@ -897,7 +897,7 @@ impl BoardState {
                         zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::A8 as usize];
 
                     self.clear(play.ending_square, Some(PieceType::King));
-                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_QUEENSIDE_INDEX]
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
                         [play.ending_square.trailing_zeros() as usize];
 
                     self.clear(1 << Tables::D8, Some(PieceType::Rook));
@@ -919,7 +919,7 @@ impl BoardState {
                     self.set(play.ending_square >> 8, play.attacked_type);
                     if let Some(attacked) = play.attacked_type {
                         self.hash ^= zob_keys.piece_keys
-                            [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                            [ZobKeys::match_to_index(attacked, self.white_to_move)]
                             [(play.ending_square >> 8).trailing_zeros() as usize];
                     }
                 }
@@ -927,7 +927,7 @@ impl BoardState {
                     self.set(play.ending_square << 8, play.attacked_type);
                     if let Some(attacked) = play.attacked_type {
                         self.hash ^= zob_keys.piece_keys
-                            [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                            [ZobKeys::match_to_index(attacked, self.white_to_move)]
                             [(play.ending_square << 8).trailing_zeros() as usize];
                     }
                 }

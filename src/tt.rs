@@ -211,24 +211,28 @@ mod tests {
         let moves = generate(board, tables);
         for mv in moves {
             let starting_hash = board.hash;
-            // println!("Before {}", board.hash);
             board.make(&mv, &zob_keys);
-            // println!("During {}", board.hash);
             perft_hash_child(board, tables, &zob_keys, depth - 1);
             board.unmake(&mv, &zob_keys);
-            // println!("After {}", board.hash);
             let final_hash = board.hash;
-            // println!("");
-            // println!("starting ^ init {:#018x}", starting_hash ^ final_hash);
             assert_eq!(starting_hash, final_hash);
         }
     }
 
+    #[ignore = "Takes a while"]
     #[test]
-    fn perft_hash_inital_state() {
+    fn perft_hash_inital_state_6() {
         perft_hash_test(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            5,
+            6,
+        );
+    }
+
+    #[test]
+    fn perft_hash_kiwipete_4() {
+        perft_hash_test(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            4,
         );
     }
 
@@ -339,8 +343,6 @@ mod tests {
 
     #[test]
     fn pawn_f2f3_hash() {
-        // NOTE: OK, so it looks like not all of the zob key fields get xor'ed when doing this
-        // It seems that it is either not updating the en passant hash, or is "updating" it twice
         hash_test(
             "rnbqkbnr/pppppp2/8/6pp/8/6PP/PPPPPP2/RNBQKBNR w KQkq g6 0 1",
             "rnbqkbnr/pppppp2/8/6pp/8/5PPP/PPPPP3/RNBQKBNR b KQkq - 0 1",
@@ -379,6 +381,123 @@ mod tests {
                 1 << Tables::F4,
                 None,
                 PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn en_passant_attacked_1() {
+        hash_test(
+            "rnbqkbnr/pppppp2/7p/6pP/8/8/PPPPPPP1/RNBQKBNR w KQkq g6 0 1",
+            "rnbqkbnr/pppppp2/6Pp/8/8/8/PPPPPPP1/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::H5,
+                1 << Tables::G6,
+                None,
+                PieceType::Pawn,
+                Some(PieceType::Pawn),
+            ),
+        );
+    }
+    #[test]
+    fn en_passant_not_attacked_1() {
+        hash_test(
+            "rnbqkbnr/pppppp2/7p/6pP/8/8/PPPPPPP1/RNBQKBNR w KQkq g6 0 1",
+            "rnbqkbnr/pppppp2/7p/6pP/8/4P3/PPPP1PP1/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::E2,
+                1 << Tables::E3,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+    #[test]
+    fn en_passant_attacked_2() {
+        hash_test(
+            "rnbqkbnr/ppp1pppp/8/2Pp4/8/8/PP1PPPPP/RNBQKBNR w KQkq d6 0 1",
+            "rnbqkbnr/ppp1pppp/3P4/8/8/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::C5,
+                1 << Tables::D6,
+                None,
+                PieceType::Pawn,
+                Some(PieceType::Pawn),
+            ),
+        );
+    }
+    #[test]
+    fn en_passant_not_attacked_2() {
+        hash_test(
+            "rnbqkbnr/ppp1pppp/8/2Pp4/8/8/PP1PPPPP/RNBQKBNR w KQkq d6 0 1",
+            "rnbqkbnr/ppp1pppp/2P5/3p4/8/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::C5,
+                1 << Tables::C6,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn castle_black_kingside() {
+        hash_test(
+            "rnbqk2r/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1",
+            "rnbq1rk1/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR w KQ - 0 1",
+            MoveRep::new(
+                1 << Tables::E8,
+                1 << Tables::G8,
+                Some(Promotion::Castle),
+                PieceType::King,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn castle_black_queenside() {
+        hash_test(
+            "r3kbnr/ppp1pppp/3q4/3p4/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
+            "2kr1bnr/ppp1pppp/3q4/3p4/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1",
+            MoveRep::new(
+                1 << Tables::E8,
+                1 << Tables::C8,
+                Some(Promotion::Castle),
+                PieceType::King,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn castle_white_kingside() {
+        hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 b kq - 0 1",
+            MoveRep::new(
+                1 << Tables::E1,
+                1 << Tables::G1,
+                Some(Promotion::Castle),
+                PieceType::King,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn castle_white_queenside() {
+        hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R3KBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/2KR1BNR b kq - 0 1",
+            MoveRep::new(
+                1 << Tables::E1,
+                1 << Tables::C1,
+                Some(Promotion::Castle),
+                PieceType::King,
                 None,
             ),
         );
