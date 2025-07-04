@@ -1,5 +1,6 @@
 // use crate::Tables;
 use crate::eval::{delta_ps_score, get_piece_value, piece_square_score};
+use crate::tt::ZobKeys;
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +28,7 @@ pub struct BoardState {
     pub reversable_move_counter: u8,
     pub full_move_counter: u16,
     pub piece_square_score: isize,
+    pub hash: u64,
     pub move_stack: Vec<MoveStackFrame>,
     pub move_stack_pointer: usize,
 }
@@ -130,10 +132,14 @@ impl BoardState {
             reversable_move_counter: 0,
             full_move_counter: 1,
             piece_square_score: 0,
+            hash: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         };
-
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        state.hash = zob_keys.generate_hash(&state);
         state.piece_square_score = piece_square_score(&state);
         state
     }
@@ -163,10 +169,15 @@ impl BoardState {
             reversable_move_counter: 0,
             full_move_counter: 0,
             piece_square_score: 0,
+            hash: 0,
             move_stack: vec![MoveStackFrame::new(); 0],
             move_stack_pointer: 0,
         };
 
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        board.hash = zob_keys.generate_hash(&board);
         board.piece_square_score = piece_square_score(&board);
         board
     }
@@ -332,6 +343,11 @@ impl BoardState {
             return Err("String does not have enough tokens to be a valid fen string".to_string());
         }
 
+        // NOTE It might be better to pass a zobrist table to this function as a ref, but since it is not called
+        // often, it should not decrease preformance to do it this way, which is easier :)
+        let zob_keys = ZobKeys::new();
+        state.hash = zob_keys.generate_hash(&state);
+        state.piece_square_score = piece_square_score(&state);
         Ok(state)
     }
 
@@ -352,7 +368,7 @@ impl BoardState {
         }
     }
 
-    pub fn apply_string_move(&mut self, play: String) {
+    pub fn apply_string_move(&mut self, play: String, zob_keys: &ZobKeys) {
         let char1 = play.chars().nth(0).unwrap();
         let char2 = play.chars().nth(1).unwrap();
         let char3 = play.chars().nth(2).unwrap();
@@ -407,7 +423,7 @@ impl BoardState {
             move_rep.promotion = Some(Promotion::Castle);
         }
 
-        self.make(&move_rep);
+        self.make(&move_rep, zob_keys);
     }
 
     /// Prints the board in an easy to understand way
@@ -464,7 +480,7 @@ impl BoardState {
         print!("\n");
     }
 
-    /// Pushes the current nonreversible state to the stack
+    /// Pushes the current non reversible state to the stack
     fn push_state(&mut self) {
         let mut frame = MoveStackFrame::new();
         frame.en_passant_target = self.en_passant_target;
@@ -478,7 +494,7 @@ impl BoardState {
         self.move_stack_pointer += 1;
     }
 
-    /// Pops the nonreversible state from the stack
+    /// Pops the non reversible state from the stack
     fn pop_state(&mut self) {
         self.move_stack_pointer -= 1;
         let frame = self.move_stack.pop().unwrap();
@@ -491,8 +507,8 @@ impl BoardState {
         self.black_kingside_castle_rights = frame.black_kingside_castle_rights;
     }
 
-    // Changes the board state to reflect the move. Also pushes to the move stack
-    pub fn make(&mut self, play: &MoveRep) {
+    /// Changes the board state to reflect the move. Also pushes to the move stack
+    pub fn make(&mut self, play: &MoveRep, zob_keys: &ZobKeys) {
         // Update piece square score
         self.piece_square_score += delta_ps_score(self, play);
         self.piece_square_score *= -1;
@@ -500,105 +516,251 @@ impl BoardState {
         // If the move is castling, do the move logic here, and return (dont do the normal path)
         if play.promotion == Some(Promotion::Castle) {
             self.push_state();
+            // If there was an enpassant target, clear it from the hash
+            if self.en_passant_target != 0 {
+                self.hash ^=
+                    zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            }
+
             self.en_passant_target = 0;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::H1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::H1 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::F1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::F1 as usize];
+
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                     self.white_queenside_castle_rights = false;
                     self.white_kingside_castle_rights = false;
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::A1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::A1 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::D1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::D1 as usize];
+
+                    if self.white_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                    }
+                    if self.white_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                    }
                     self.white_queenside_castle_rights = false;
                     self.white_kingside_castle_rights = false;
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::H8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::H8 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::F8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::F8 as usize];
+
+                    if self.black_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                    }
+                    if self.black_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                    }
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
                     self.clear(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::A8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::A8 as usize];
+
                     self.set(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::D8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::D8 as usize];
+
+                    if self.black_queenside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                    }
+                    if self.black_kingside_castle_rights {
+                        self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                    }
                     self.black_queenside_castle_rights = false;
                     self.black_kingside_castle_rights = false;
                 }
                 _ => return,
             }
             self.white_to_move = !self.white_to_move;
+            self.hash ^= zob_keys.side_key;
             return;
         }
         self.push_state();
         self.clear(play.starting_square, Some(play.moved_type));
+        self.hash ^= zob_keys.piece_keys
+            [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+            [play.starting_square.trailing_zeros() as usize];
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
             match self.white_to_move {
-                true => self.clear_all(play.ending_square >> 8),
-                false => self.clear_all(play.ending_square << 8),
+                true => {
+                    // TODO clear_all is the ugly result of a architectural mistake. Fix this!
+                    self.clear_all(play.ending_square >> 8);
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_PAWN_INDEX]
+                        [(play.ending_square >> 8).trailing_zeros() as usize];
+                }
+                false => {
+                    // TODO clear_all is the ugly result of a architectural mistake. Fix this!
+                    self.clear_all(play.ending_square << 8);
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_PAWN_INDEX]
+                        [(play.ending_square << 8).trailing_zeros() as usize];
+                }
             }
         } else {
             // Normal attack clear
+            // TODO clear_all is the ugly result of a architectural mistake. Fix this!
             self.clear_all(play.ending_square);
+            if let Some(attacked) = play.attacked_type {
+                self.hash ^= zob_keys.piece_keys
+                    [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                    [play.ending_square.trailing_zeros() as usize];
+            }
             // If the attacked piece was a rook, remove the relevent castling rights
             if play.ending_square == 1 << Tables::A1 && self.white_queenside_castle_rights {
                 self.white_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::H1 && self.white_kingside_castle_rights {
                 self.white_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::A8 && self.black_queenside_castle_rights {
                 self.black_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
             } else if play.ending_square == 1 << Tables::H8 && self.black_kingside_castle_rights {
                 self.black_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
+        }
+        // Now that the en passant target has been handled, clear the en passant hash
+        if self.en_passant_target != 0 {
+            self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            self.en_passant_target = 0;
         }
         // Promotion logic
         if let Some(promotion) = play.promotion {
             match promotion {
-                Promotion::Queen => self.set(play.ending_square, Some(PieceType::Queen)),
-                Promotion::Rook => self.set(play.ending_square, Some(PieceType::Rook)),
-                Promotion::Bishop => self.set(play.ending_square, Some(PieceType::Bishop)),
-                Promotion::Knight => self.set(play.ending_square, Some(PieceType::Knight)),
+                Promotion::Queen => {
+                    self.set(play.ending_square, Some(PieceType::Queen));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Queen, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Rook => {
+                    self.set(play.ending_square, Some(PieceType::Rook));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Rook, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Bishop => {
+                    self.set(play.ending_square, Some(PieceType::Bishop));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Bishop, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Knight => {
+                    self.set(play.ending_square, Some(PieceType::Knight));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Knight, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
                 _ => {}
             }
         } else {
             self.set(play.ending_square, Some(play.moved_type));
+            self.hash ^= zob_keys.piece_keys
+                [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+                [play.ending_square.trailing_zeros() as usize];
         }
         // Do special logic here
         // If the move is not castling, but can effect castling rights, change the rights here
         if play.moved_type == PieceType::Rook {
             if self.white_queenside_castle_rights && play.starting_square == 1 << Tables::A1 {
                 self.white_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
             }
             if self.white_kingside_castle_rights && play.starting_square == 1 << Tables::H1 {
                 self.white_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
             }
             if self.black_queenside_castle_rights && play.starting_square == 1 << Tables::A8 {
                 self.black_queenside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
             }
             if self.black_kingside_castle_rights && play.starting_square == 1 << Tables::H8 {
                 self.black_kingside_castle_rights = false;
+                self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
         }
         if play.moved_type == PieceType::King && play.promotion == None {
             if self.white_to_move {
+                if self.white_queenside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+                }
                 self.white_queenside_castle_rights = false;
+                if self.white_kingside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+                }
                 self.white_kingside_castle_rights = false;
             } else {
+                if self.black_queenside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+                }
                 self.black_queenside_castle_rights = false;
+                if self.black_kingside_castle_rights {
+                    self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+                }
                 self.black_kingside_castle_rights = false;
             }
         }
@@ -610,50 +772,137 @@ impl BoardState {
                     && play.ending_square & Tables::RANK_5 != 0)
         {
             self.en_passant_target = match self.white_to_move {
-                true => play.starting_square << 8,
-                false => play.starting_square >> 8,
+                true => {
+                    self.hash ^= zob_keys.enpassant_keys
+                        [(play.starting_square << 8).trailing_zeros() as usize];
+                    play.starting_square << 8
+                }
+                false => {
+                    self.hash ^= zob_keys.enpassant_keys
+                        [(play.starting_square >> 8).trailing_zeros() as usize];
+                    play.starting_square >> 8
+                }
             }
         } else {
-            self.en_passant_target = 0;
+            if self.en_passant_target != 0 {
+                self.hash ^=
+                    zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            }
+            // self.en_passant_target = 0;
         }
+        self.hash ^= zob_keys.side_key;
         self.white_to_move = !self.white_to_move;
     }
 
-    // Reverts the move from the board. Pops from the move stack
-    pub fn unmake(&mut self, play: &MoveRep) {
+    /// Reverts the move from the board. Pops from the move stack
+    pub fn unmake(&mut self, play: &MoveRep, zob_keys: &ZobKeys) {
+        let previous_castle_rights = (
+            self.move_stack[self.move_stack_pointer - 1].white_queenside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].white_kingside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].black_queenside_castle_rights,
+            self.move_stack[self.move_stack_pointer - 1].black_kingside_castle_rights,
+        );
+        let previous_en_passant = self.move_stack[self.move_stack_pointer - 1].en_passant_target;
+        // TODO This might be able to be improved by using 16 castle hashes instead of 4
+        if self.white_queenside_castle_rights != previous_castle_rights.0 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
+        }
+        if self.white_kingside_castle_rights != previous_castle_rights.1 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_KINGSIDE_INDEX];
+        }
+        if self.black_queenside_castle_rights != previous_castle_rights.2 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_QUEENSIDE_INDEX];
+        }
+        if self.black_kingside_castle_rights != previous_castle_rights.3 {
+            self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
+        }
+
+        if self.en_passant_target != 0 {
+            self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+        }
+
+        if previous_en_passant != 0 {
+            self.hash ^= zob_keys.enpassant_keys[previous_en_passant.trailing_zeros() as usize];
+        }
+
         self.pop_state();
         // If the move to unmake is castling do this and return
         if play.promotion == Some(Promotion::Castle) {
             // Swap side to play first
             self.white_to_move = !self.white_to_move;
+            self.hash ^= zob_keys.side_key;
             match play.ending_square {
                 e if e == 1 << Tables::G1 => {
                     // White kingside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::H1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::H1 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::F1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::F1 as usize];
                 }
                 e if e == 1 << Tables::C1 => {
                     // White queenside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::A1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::A1 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::WHITE_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::D1, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::WHITE_ROOK_INDEX][Tables::D1 as usize];
                 }
                 e if e == 1 << Tables::G8 => {
                     // Black kingside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::H8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::H8 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::F8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::F8 as usize];
                 }
                 e if e == 1 << Tables::C8 => {
                     // Black queenside
                     self.set(play.starting_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.starting_square.trailing_zeros() as usize];
+
                     self.set(1 << Tables::A8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::A8 as usize];
+
                     self.clear(play.ending_square, Some(PieceType::King));
+                    self.hash ^= zob_keys.piece_keys[ZobKeys::BLACK_KING_INDEX]
+                        [play.ending_square.trailing_zeros() as usize];
+
                     self.clear(1 << Tables::D8, Some(PieceType::Rook));
+                    self.hash ^=
+                        zob_keys.piece_keys[ZobKeys::BLACK_ROOK_INDEX][Tables::D8 as usize];
                 }
                 _ => return,
             }
@@ -664,28 +913,75 @@ impl BoardState {
         }
         if play.ending_square == self.en_passant_target && play.moved_type == PieceType::Pawn {
             // Special en passant attack logic
-            // Remember, we have not switch the side to move back yet
+            // Remember, we have not switched the side to move back yet
             match !self.white_to_move {
-                true => self.set(play.ending_square >> 8, play.attacked_type),
-                false => self.set(play.ending_square << 8, play.attacked_type),
+                true => {
+                    self.set(play.ending_square >> 8, play.attacked_type);
+                    if let Some(attacked) = play.attacked_type {
+                        self.hash ^= zob_keys.piece_keys
+                            [ZobKeys::match_to_index(attacked, self.white_to_move)]
+                            [(play.ending_square >> 8).trailing_zeros() as usize];
+                    }
+                }
+                false => {
+                    self.set(play.ending_square << 8, play.attacked_type);
+                    if let Some(attacked) = play.attacked_type {
+                        self.hash ^= zob_keys.piece_keys
+                            [ZobKeys::match_to_index(attacked, self.white_to_move)]
+                            [(play.ending_square << 8).trailing_zeros() as usize];
+                    }
+                }
             }
         } else {
             self.set(play.ending_square, play.attacked_type);
+            if let Some(attacked) = play.attacked_type {
+                // NOTE, we dont invert the side to move because we have not toggled it back yet
+                self.hash ^= zob_keys.piece_keys
+                    [ZobKeys::match_to_index(attacked, self.white_to_move)]
+                    [play.ending_square.trailing_zeros() as usize];
+            }
         }
         // Put this after the first set because we want to replace the opponents piece
         self.white_to_move = !self.white_to_move;
+        self.hash ^= zob_keys.side_key;
         if let Some(promotion) = play.promotion {
             match promotion {
-                Promotion::Queen => self.clear(play.ending_square, Some(PieceType::Queen)),
-                Promotion::Rook => self.clear(play.ending_square, Some(PieceType::Rook)),
-                Promotion::Bishop => self.clear(play.ending_square, Some(PieceType::Bishop)),
-                Promotion::Knight => self.clear(play.ending_square, Some(PieceType::Knight)),
+                Promotion::Queen => {
+                    self.clear(play.ending_square, Some(PieceType::Queen));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Queen, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Rook => {
+                    self.clear(play.ending_square, Some(PieceType::Rook));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Rook, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Bishop => {
+                    self.clear(play.ending_square, Some(PieceType::Bishop));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Bishop, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
+                Promotion::Knight => {
+                    self.clear(play.ending_square, Some(PieceType::Knight));
+                    self.hash ^= zob_keys.piece_keys
+                        [ZobKeys::match_to_index(PieceType::Knight, self.white_to_move)]
+                        [play.ending_square.trailing_zeros() as usize];
+                }
                 _ => {}
             }
         } else {
             self.clear(play.ending_square, Some(play.moved_type));
+            self.hash ^= zob_keys.piece_keys
+                [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+                [play.ending_square.trailing_zeros() as usize];
         }
         self.set(play.starting_square, Some(play.moved_type));
+        self.hash ^= zob_keys.piece_keys
+            [ZobKeys::match_to_index(play.moved_type, self.white_to_move)]
+            [play.starting_square.trailing_zeros() as usize];
         // Update the piece square score
         self.piece_square_score *= -1;
         self.piece_square_score -= delta_ps_score(self, play);
@@ -945,6 +1241,30 @@ impl BoardState {
             attack_mask |= tables.king_attacks[start_square];
         }
 
+        attack_mask
+    }
+
+    // Get the pawn attack mask of white
+    pub fn white_pawn_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        let mut pawn_bb = self.white_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.white_pawn_attacks[start_square];
+        }
+        attack_mask
+    }
+
+    // Get the pawn attack mask of black
+    pub fn black_pawn_attack_mask(&self, tables: &Tables) -> u64 {
+        let mut attack_mask = 0;
+
+        let mut pawn_bb = self.black_pawns;
+        while pawn_bb != 0 {
+            let start_square = pop_lsb(&mut pawn_bb);
+            attack_mask |= tables.black_pawn_attacks[start_square];
+        }
         attack_mask
     }
 
@@ -1534,13 +1854,18 @@ impl BoardState {
     }
 
     // Checks that the move will not result in check
-    pub fn move_safe_for_king(&mut self, table: &Tables, play: &MoveRep) -> bool {
-        self.make(&play);
+    pub fn move_safe_for_king(
+        &mut self,
+        table: &Tables,
+        play: &MoveRep,
+        zob_keys: &ZobKeys,
+    ) -> bool {
+        self.make(&play, zob_keys);
         let is_safe = !match self.white_to_move {
             true => self.black_in_check(&table),
             false => self.white_in_check(&table),
         };
-        self.unmake(&play);
+        self.unmake(&play, zob_keys);
         is_safe
     }
 }
@@ -1777,8 +2102,8 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        pawn_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        pawn_test.make(&move_test, &zob_keys);
 
         assert_eq!(pawn_test.white_to_move, false);
         assert_eq!(pawn_test.white_pawns & 1 << Tables::A4 != 0, true);
@@ -1799,7 +2124,8 @@ mod tests {
             attacked_type: None,
         };
 
-        black_pawn_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_pawn_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_pawn_test.white_to_move, true);
         assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D7 != 0, false);
@@ -1820,7 +2146,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        black_pawn_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_pawn_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_pawn_attack_test.white_to_move, true);
         assert_eq!(
@@ -1851,7 +2178,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        pawn_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        pawn_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(pawn_attack_test.white_to_move, false);
         assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::B2 != 0, false);
@@ -1873,7 +2201,8 @@ mod tests {
             attacked_type: None,
         };
 
-        knight_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        knight_test.make(&move_test, &zob_keys);
 
         assert_eq!(knight_test.white_to_move, false);
         assert_eq!(knight_test.white_knights & 1 << Tables::A3 != 0, true);
@@ -1894,7 +2223,8 @@ mod tests {
             attacked_type: None,
         };
 
-        black_knight_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_knight_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_knight_test.white_to_move, true);
         assert_eq!(
@@ -1918,7 +2248,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        white_knight_attack.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        white_knight_attack.make(&move_test, &zob_keys);
 
         assert_eq!(white_knight_attack.white_to_move, false);
         assert_eq!(
@@ -1949,7 +2280,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        black_knight_attack_test.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        black_knight_attack_test.make(&move_test, &zob_keys);
 
         assert_eq!(black_knight_attack_test.white_to_move, true);
         assert_eq!(
@@ -1980,7 +2312,8 @@ mod tests {
             attacked_type: None,
         };
 
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
@@ -2000,8 +2333,8 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
@@ -2021,8 +2354,8 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
@@ -2044,7 +2377,8 @@ mod tests {
             attacked_type: Some(PieceType::Pawn),
         };
 
-        board.make(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
@@ -2065,9 +2399,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
@@ -2087,9 +2421,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
@@ -2111,9 +2445,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: None,
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_pawns & 1 << Tables::H7 != 0, true);
@@ -2133,9 +2467,9 @@ mod tests {
             moved_type: PieceType::Pawn,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&move_test);
-        board.unmake(&move_test);
+        let zob_keys = ZobKeys::new();
+        board.make(&move_test, &zob_keys);
+        board.unmake(&move_test, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_pawns & 1 << Tables::B7 != 0, true);
@@ -2156,9 +2490,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
@@ -2178,9 +2512,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
@@ -2201,9 +2535,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
@@ -2223,9 +2557,9 @@ mod tests {
             moved_type: PieceType::Knight,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
@@ -2246,9 +2580,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
@@ -2268,9 +2602,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, true);
         assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
@@ -2291,9 +2625,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: None,
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
@@ -2313,9 +2647,9 @@ mod tests {
             moved_type: PieceType::Rook,
             attacked_type: Some(PieceType::Pawn),
         };
-
-        board.make(&test_move);
-        board.unmake(&test_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&test_move, &zob_keys);
+        board.unmake(&test_move, &zob_keys);
 
         assert_eq!(board.white_to_move, false);
         assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
@@ -2673,7 +3007,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(true, result);
     }
 
@@ -2690,7 +3025,8 @@ mod tests {
             PieceType::King,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(false, result);
     }
 
@@ -2707,7 +3043,8 @@ mod tests {
             PieceType::King,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(true, result);
     }
 
@@ -2724,7 +3061,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        let result = board.move_safe_for_king(&tables, &play);
+        let zob_keys = ZobKeys::new();
+        let result = board.move_safe_for_king(&tables, &play, &zob_keys);
         assert_eq!(false, result);
     }
 
@@ -2817,15 +3155,15 @@ mod tests {
             PieceType::Knight,
             None,
         );
-
+        let zob_keys = ZobKeys::new();
         assert_eq!(board.en_passant_target, 0);
-        board.make(&mv_1);
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::B3);
-        board.make(&mv_2);
+        board.make(&mv_2, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
-        board.unmake(&mv_2);
+        board.unmake(&mv_2, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::B3);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2841,9 +3179,10 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2859,7 +3198,8 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2877,9 +3217,10 @@ mod tests {
             None,
         );
 
-        board.make(&mv_1);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 1 << Tables::E6);
-        board.unmake(&mv_1);
+        board.unmake(&mv_1, &zob_keys);
         assert_eq!(board.en_passant_target, 0);
     }
 
@@ -2939,10 +3280,11 @@ mod tests {
             Some(PieceType::Pawn),
         );
 
-        board.make(&expected_mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&expected_mv, &zob_keys);
         print_bitboard(board.occupancy());
         assert_eq!(board.black_pawns, 0xbf000000000000);
-        board.unmake(&expected_mv);
+        board.unmake(&expected_mv, &zob_keys);
         assert_eq!(board.black_pawns, 0xbf004000000000);
     }
 
@@ -3106,13 +3448,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::G1);
         assert_eq!(board.white_rooks & 1 << Tables::F1, 1 << Tables::F1);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::H1, 1 << Tables::H1);
         assert_eq!(board.white_kingside_castle_rights, true);
@@ -3131,13 +3474,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::C1);
         assert_eq!(board.white_rooks & 1 << Tables::D1, 1 << Tables::D1);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::A1, 1 << Tables::A1);
         assert_eq!(board.white_kingside_castle_rights, true);
@@ -3156,13 +3500,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::G8);
         assert_eq!(board.black_rooks & 1 << Tables::F8, 1 << Tables::F8);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::H8, 1 << Tables::H8);
         assert_eq!(board.black_kingside_castle_rights, true);
@@ -3181,13 +3526,14 @@ mod tests {
             PieceType::King,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::C8);
         assert_eq!(board.black_rooks & 1 << Tables::D8, 1 << Tables::D8);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
 
-        board.unmake(&mv);
+        board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::A8, 1 << Tables::A8);
         assert_eq!(board.black_kingside_castle_rights, true);
@@ -3207,8 +3553,8 @@ mod tests {
             PieceType::Rook,
             None,
         );
-
-        board.make(&kingside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&kingside_rook_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, true);
     }
@@ -3227,7 +3573,8 @@ mod tests {
             None,
         );
 
-        board.make(&queenside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&queenside_rook_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, true);
         assert_eq!(board.white_queenside_castle_rights, false);
     }
@@ -3246,7 +3593,8 @@ mod tests {
             None,
         );
 
-        board.make(&king_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&king_move, &zob_keys);
         assert_eq!(board.white_kingside_castle_rights, false);
         assert_eq!(board.white_queenside_castle_rights, false);
     }
@@ -3265,7 +3613,8 @@ mod tests {
             None,
         );
 
-        board.make(&kingside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&kingside_rook_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, true);
     }
@@ -3284,7 +3633,8 @@ mod tests {
             None,
         );
 
-        board.make(&queenside_rook_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&queenside_rook_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, true);
         assert_eq!(board.black_queenside_castle_rights, false);
     }
@@ -3303,7 +3653,8 @@ mod tests {
             None,
         );
 
-        board.make(&king_move);
+        let zob_keys = ZobKeys::new();
+        board.make(&king_move, &zob_keys);
         assert_eq!(board.black_kingside_castle_rights, false);
         assert_eq!(board.black_queenside_castle_rights, false);
     }
@@ -3322,7 +3673,8 @@ mod tests {
             PieceType::Pawn,
             None,
         );
-        board.make(&mv);
+        let zob_keys = ZobKeys::new();
+        board.make(&mv, &zob_keys);
         assert_eq!(board.white_queens, 1 << Tables::D1 | 1 << Tables::H8);
         assert_eq!(board.white_pawns & 1 << Tables::H8, 0);
     }

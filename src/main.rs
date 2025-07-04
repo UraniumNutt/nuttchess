@@ -4,6 +4,7 @@ mod eval;
 mod generate;
 mod search;
 pub mod tables;
+mod tt;
 use crate::board::*;
 use crate::comm::*;
 use crate::tables::*;
@@ -14,13 +15,31 @@ use std::env;
 use std::path::Path;
 use std::time;
 use std::time::Instant;
+use tt::ZobKeys;
 
 fn main() {
+    let mut board = BoardState::starting_state();
+    let zob_keys = ZobKeys::new();
+    let args: Vec<String> = env::args().collect();
     let mut running = true;
+    // For perft testing
+    // TODO remove?
+    if args.len() == 4 || args.len() == 3 {
+        let depth = args[1].parse::<u64>();
+        let fen = args[2].split(" ");
+        board = BoardState::state_from_fen(fen).unwrap();
+        if args.len() == 4 {
+            let moves = args[3].split(" ");
+            for mv in moves {
+                board.apply_string_move(mv.to_string(), &zob_keys);
+            }
+        }
+        perft(&mut board, depth.unwrap() as usize, &zob_keys);
+        running = false;
+    }
     let log_file = Path::new("foo.txt");
     let mut comm = Comm::create(log_file).unwrap();
 
-    let mut board = BoardState::starting_state();
     let tables = Tables::new();
     while running {
         let line = comm.engine_in();
@@ -40,7 +59,7 @@ fn main() {
                     board = BoardState::starting_state();
                     if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
-                            board.apply_string_move(mv.to_string());
+                            board.apply_string_move(mv.to_string(), &zob_keys);
                         }
                     }
                 }
@@ -56,7 +75,7 @@ fn main() {
                     }
                     if let Some(mv_token) = tokens.next() {
                         while let Some(mv) = tokens.next() {
-                            board.apply_string_move(mv.to_string());
+                            board.apply_string_move(mv.to_string(), &zob_keys);
                         }
                     }
                 }
@@ -72,7 +91,7 @@ fn main() {
                     match depth {
                         Some(d) => {
                             if let Ok(parsed_d) = d.parse::<u64>() {
-                                perft(&mut board, parsed_d as usize);
+                                perft(&mut board, parsed_d as usize, &zob_keys);
                             } else {
                                 comm.engine_out(format!(
                                     "Error parsing value of depth token {}",
@@ -105,6 +124,7 @@ fn main() {
                     let best_move = id_search(
                         &mut board,
                         &tables,
+                        &zob_keys,
                         7,
                         Some(starting_time),
                         Some(time_to_spend),
@@ -119,6 +139,7 @@ fn main() {
                     let best_move = id_search(
                         &mut board,
                         &tables,
+                        &zob_keys,
                         7,
                         Some(starting_time),
                         Some(ms as u128),
@@ -135,6 +156,7 @@ fn main() {
                                 let best_move = negamax(
                                     &mut board,
                                     &tables,
+                                    &zob_keys,
                                     depth_number as usize,
                                     None,
                                     None,

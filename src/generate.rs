@@ -1,5 +1,3 @@
-use core::str;
-
 use crate::board::*;
 use crate::tables::*;
 // Generate a vector of possible moves from the current board state

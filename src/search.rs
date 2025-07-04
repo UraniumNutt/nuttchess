@@ -4,16 +4,17 @@ use crate::board::*;
 use crate::eval::*;
 use crate::generate::*;
 use crate::tables::*;
-pub fn perft(board: &mut BoardState, depth: usize) {
+use crate::tt::ZobKeys;
+pub fn perft(board: &mut BoardState, depth: usize, zob_keys: &ZobKeys) {
     let tables = Tables::new();
     let top_moves = generate(board, &tables);
     let mut total_node_count = 0;
     for lower_move in top_moves {
         if let Ok(move_name) = lower_move.to_string() {
-            board.make(&lower_move);
-            let lower_node_count = perft_search(board, &tables, depth - 1);
+            board.make(&lower_move, &zob_keys);
+            let lower_node_count = perft_search(board, &tables, zob_keys, depth - 1);
             total_node_count += lower_node_count;
-            board.unmake(&lower_move);
+            board.unmake(&lower_move, &zob_keys);
 
             println!("{} {}", move_name, lower_node_count);
         } else {
@@ -23,7 +24,12 @@ pub fn perft(board: &mut BoardState, depth: usize) {
     println!("\n{}", total_node_count);
 }
 
-pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> usize {
+pub fn perft_search(
+    board: &mut BoardState,
+    tables: &Tables,
+    zob_keys: &ZobKeys,
+    depth: usize,
+) -> usize {
     let moves = generate(board, &tables);
     if depth == 1 {
         return moves.len();
@@ -33,9 +39,9 @@ pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> us
     }
     let mut node_count = 0;
     for mv in moves {
-        board.make(&mv);
-        node_count += perft_search(board, &tables, depth - 1);
-        board.unmake(&mv);
+        board.make(&mv, &zob_keys);
+        node_count += perft_search(board, &tables, zob_keys, depth - 1);
+        board.unmake(&mv, zob_keys);
     }
     return node_count;
 }
@@ -44,6 +50,7 @@ pub fn perft_search(board: &mut BoardState, tables: &Tables, depth: usize) -> us
 pub fn negamax(
     board: &mut BoardState,
     tables: &Tables,
+    zob_keys: &ZobKeys,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
@@ -59,10 +66,11 @@ pub fn negamax(
     let mut beta = isize::MAX;
     let mut node_count = 0;
     for mv in &moves {
-        board.make(&mv);
+        board.make(&mv, zob_keys);
         let score = negamax_child(
             board,
             tables,
+            zob_keys,
             beta.saturating_neg(),
             alpha.saturating_neg(),
             moves.len(),
@@ -73,7 +81,7 @@ pub fn negamax(
             test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv);
+        board.unmake(&mv, zob_keys);
         if score > alpha {
             alpha = score;
             if alpha >= beta {
@@ -88,6 +96,7 @@ pub fn negamax(
 fn negamax_child(
     board: &mut BoardState,
     tables: &Tables,
+    zob_keys: &ZobKeys,
     mut alpha: isize,
     mut beta: isize,
     last_number_of_moves: usize,
@@ -133,6 +142,7 @@ fn negamax_child(
         return quiescence(
             board,
             tables,
+            zob_keys,
             alpha,
             beta,
             10,
@@ -153,10 +163,11 @@ fn negamax_child(
             _ => {}
         }
         // println!("Running child search on move {}", mv.to_string().unwrap());
-        board.make(&mv);
+        board.make(&mv, zob_keys);
         let score = negamax_child(
             board,
             tables,
+            zob_keys,
             beta.saturating_neg(),
             alpha.saturating_neg(),
             moves.len(),
@@ -167,7 +178,7 @@ fn negamax_child(
             test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv);
+        board.unmake(&mv, zob_keys);
 
         if score >= beta {
             return beta;
@@ -179,10 +190,11 @@ fn negamax_child(
     return alpha;
 }
 
-/// Preformes a search using iterative deepening
+/// Preforms a search using iterative deepening
 pub fn id_search(
     board: &mut BoardState,
     tables: &Tables,
+    zob_keys: &ZobKeys,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
@@ -190,13 +202,14 @@ pub fn id_search(
 ) -> MoveRep {
     let mut current_depth = 1;
     let mut test_counter = 0;
-    let mut best_move = negamax(board, tables, 1, None, None, &mut test_counter);
+    let mut best_move = negamax(board, tables, zob_keys, 1, None, None, &mut test_counter);
 
     loop {
         current_depth += 1;
         let possible_best = negamax(
             board,
             tables,
+            zob_keys,
             current_depth,
             timer,
             duration,
@@ -216,6 +229,7 @@ pub fn id_search(
 fn quiescence(
     board: &mut BoardState,
     tables: &Tables,
+    zob_keys: &ZobKeys,
     mut alpha: isize,
     mut beta: isize,
     depth: usize,
@@ -251,10 +265,11 @@ fn quiescence(
             // Skip non captures
             continue;
         }
-        board.make(&mv);
+        board.make(&mv, zob_keys);
         let score = quiescence(
             board,
             tables,
+            zob_keys,
             beta.saturating_neg(),
             alpha.saturating_neg(),
             depth - 1,
@@ -264,7 +279,7 @@ fn quiescence(
             test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv);
+        board.unmake(&mv, zob_keys);
         if score >= beta {
             return score;
         }
@@ -301,7 +316,8 @@ mod tests {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
 
-        let node_count = perft_search(&mut board, &tables, 0);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 0);
         assert_eq!(node_count, 1);
     }
 
@@ -310,7 +326,8 @@ mod tests {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
 
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 20);
     }
 
@@ -319,7 +336,8 @@ mod tests {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
 
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 400);
     }
 
@@ -328,7 +346,8 @@ mod tests {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
 
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
         assert_eq!(node_count, 8902);
     }
 
@@ -337,7 +356,8 @@ mod tests {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
 
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
         assert_eq!(node_count, 197281);
     }
 
@@ -346,7 +366,8 @@ mod tests {
     fn depth_5() {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
         assert_eq!(node_count, 4865609);
     }
 
@@ -355,7 +376,8 @@ mod tests {
     fn depth_6() {
         let mut board = BoardState::starting_state();
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 6);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 6);
         assert_eq!(node_count, 119_060_324);
     }
 
@@ -365,7 +387,8 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 48);
     }
 
@@ -375,7 +398,8 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 2039);
     }
 
@@ -385,7 +409,8 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
 
         assert_eq!(node_count, 97862);
     }
@@ -397,7 +422,8 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
 
         assert_eq!(node_count, 4085603);
     }
@@ -409,7 +435,8 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
 
         assert_eq!(node_count, 193690690);
     }
@@ -420,7 +447,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 14);
     }
 
@@ -430,7 +458,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 191);
     }
 
@@ -440,7 +469,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
         assert_eq!(node_count, 2812);
     }
 
@@ -450,7 +480,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
         assert_eq!(node_count, 43238);
     }
 
@@ -460,7 +491,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
         assert_eq!(node_count, 674624);
     }
 
@@ -471,7 +503,8 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 6);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 6);
         assert_eq!(node_count, 11030083);
     }
 
@@ -481,7 +514,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 6);
     }
 
@@ -491,7 +525,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 264);
     }
 
@@ -501,7 +536,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
         assert_eq!(node_count, 9467);
     }
 
@@ -511,7 +547,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
         assert_eq!(node_count, 422333);
     }
 
@@ -522,7 +559,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
         assert_eq!(node_count, 15833292);
     }
 
@@ -533,7 +571,8 @@ mod tests {
             "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 6);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 6);
         assert_eq!(node_count, 706045033);
     }
 
@@ -543,7 +582,8 @@ mod tests {
             "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 44);
     }
 
@@ -553,7 +593,8 @@ mod tests {
             "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 1486);
     }
 
@@ -563,7 +604,8 @@ mod tests {
             "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
         assert_eq!(node_count, 62379);
     }
 
@@ -574,7 +616,8 @@ mod tests {
             "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
         assert_eq!(node_count, 2103487);
     }
 
@@ -585,7 +628,8 @@ mod tests {
             "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
         assert_eq!(node_count, 89941194);
     }
 
@@ -595,7 +639,8 @@ mod tests {
             "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 1);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 1);
         assert_eq!(node_count, 46);
     }
 
@@ -605,7 +650,8 @@ mod tests {
             "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 2);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 2);
         assert_eq!(node_count, 2079);
     }
 
@@ -615,7 +661,8 @@ mod tests {
             "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 3);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 3);
         assert_eq!(node_count, 89890);
     }
 
@@ -626,7 +673,8 @@ mod tests {
             "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 4);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 4);
         assert_eq!(node_count, 3894594);
     }
 
@@ -637,7 +685,8 @@ mod tests {
             "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ".to_string(),
         );
         let tables = Tables::new();
-        let node_count = perft_search(&mut board, &tables, 5);
+        let zob_keys = ZobKeys::new();
+        let node_count = perft_search(&mut board, &tables, &zob_keys, 5);
         assert_eq!(node_count, 164075551);
     }
 
