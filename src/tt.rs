@@ -1,7 +1,10 @@
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
-use crate::board::{BoardState, PieceType};
+use crate::{
+    board::{BoardState, PieceType},
+    tables::Tables,
+};
 
 pub struct ZobKeys {
     // Piece order:
@@ -132,33 +135,61 @@ impl ZobKeys {
         }
         hash
     }
+
+    /// Debuging function to print the keys in the table
+    fn print_keys(&self) {
+        for piece_type in self.piece_keys {
+            for key in piece_type {
+                println!("{:#018x}", key);
+            }
+        }
+        for key in self.enpassant_keys {
+            println!("{:#018x}", key);
+        }
+
+        for key in self.castle_keys {
+            println!("{:#018x}", key);
+        }
+
+        println!("{:#018x}", self.side_key);
+    }
+
+    /// Debuging function to get some important keys
+    fn print_special_keys(&self) {
+        println!(
+            "The en passant key of G6 is {:#018x}",
+            self.enpassant_keys[Tables::G6 as usize]
+        );
+        println!(
+            "The starting square key is {:#018x}",
+            self.piece_keys[Self::WHITE_PAWN_INDEX][Tables::F2 as usize]
+        );
+        println!(
+            "The ending square key is {:#018x}",
+            self.piece_keys[Self::WHITE_PAWN_INDEX][Tables::F3 as usize]
+        );
+        println!("The side to mvoe key is {:#018x}", self.side_key);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{board::MoveRep, tables::Tables};
+
+    use crate::{
+        board::{MoveRep, Promotion},
+        generate::generate,
+        tables::Tables,
+    };
 
     use super::*;
 
-    #[test]
-    fn pawn_move_hash() {
-        let mut starting_board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
-        );
-        let mut final_board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".to_string(),
-        );
+    fn hash_test(starting_board: &str, final_board: &str, mv: MoveRep) {
+        let mut starting_board = BoardState::state_from_string_fen(starting_board.to_string());
+        let mut final_board = BoardState::state_from_string_fen(final_board.to_string());
+
         let zob_keys = &ZobKeys::new();
         let initial_hash = starting_board.hash;
         let final_hash = final_board.hash;
-
-        let mv = MoveRep::new(
-            1 << Tables::E2,
-            1 << Tables::E4,
-            None,
-            PieceType::Pawn,
-            None,
-        );
 
         starting_board.make(&mv, zob_keys);
         assert_eq!(starting_board.hash, final_hash);
@@ -166,29 +197,190 @@ mod tests {
         assert_eq!(starting_board.hash, initial_hash);
     }
 
+    fn perft_hash_test(starting_board: &str, depth: u64) {
+        let mut starting_board = BoardState::state_from_string_fen(starting_board.to_string());
+        let tables = Tables::new();
+        let zob_keys = &ZobKeys::new();
+        perft_hash_child(&mut starting_board, &tables, zob_keys, depth);
+    }
+
+    fn perft_hash_child(board: &mut BoardState, tables: &Tables, zob_keys: &ZobKeys, depth: u64) {
+        if depth == 0 {
+            return;
+        }
+        let moves = generate(board, tables);
+        for mv in moves {
+            let starting_hash = board.hash;
+            // println!("Before {}", board.hash);
+            board.make(&mv, &zob_keys);
+            // println!("During {}", board.hash);
+            perft_hash_child(board, tables, &zob_keys, depth - 1);
+            board.unmake(&mv, &zob_keys);
+            // println!("After {}", board.hash);
+            let final_hash = board.hash;
+            // println!("");
+            // println!("starting ^ init {:#018x}", starting_hash ^ final_hash);
+            assert_eq!(starting_hash, final_hash);
+        }
+    }
+
+    #[test]
+    fn perft_hash_inital_state() {
+        perft_hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            5,
+        );
+    }
+
+    #[test]
+    fn pawn_move_hash() {
+        hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            MoveRep::new(
+                1 << Tables::E2,
+                1 << Tables::E4,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
     #[test]
     fn knight_move_hash() {
-        let mut starting_board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+        hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::G1,
+                1 << Tables::F3,
+                None,
+                PieceType::Knight,
+                None,
+            ),
         );
-        let mut final_board = BoardState::state_from_string_fen(
-            "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 0 1".to_string(),
-        );
-        let zob_keys = &ZobKeys::new();
-        let initial_hash = starting_board.hash;
-        let final_hash = final_board.hash;
+    }
 
-        let mv = MoveRep::new(
-            1 << Tables::G1,
-            1 << Tables::F3,
-            None,
-            PieceType::Knight,
-            None,
+    #[test]
+    fn bishop_move_hash() {
+        hash_test(
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppp1ppp/8/1B2p3/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::F1,
+                1 << Tables::B5,
+                None,
+                PieceType::Bishop,
+                None,
+            ),
         );
+    }
 
-        starting_board.make(&mv, zob_keys);
-        assert_eq!(starting_board.hash, final_hash);
-        starting_board.unmake(&mv, zob_keys);
-        assert_eq!(starting_board.hash, initial_hash);
+    #[test]
+    fn fools_mate_hash() {
+        hash_test(
+            "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 1",
+            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::D8,
+                1 << Tables::H4,
+                None,
+                PieceType::Queen,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn promotion_hash() {
+        hash_test(
+            "rnb1kbnr/pppPpppp/8/8/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbQkbnr/ppp1pppp/8/8/8/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::D7,
+                1 << Tables::D8,
+                Some(Promotion::Queen),
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn attack_hash() {
+        hash_test(
+            "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppp1ppp/8/4P3/8/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::D4,
+                1 << Tables::E5,
+                None,
+                PieceType::Pawn,
+                Some(PieceType::Pawn),
+            ),
+        );
+    }
+
+    #[test]
+    fn pawn_f2f4_hash() {
+        hash_test(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/5P2/8/PPPPP1PP/RNBQKBNR b KQkq f3 0 1",
+            MoveRep::new(
+                1 << Tables::F2,
+                1 << Tables::F4,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn pawn_f2f3_hash() {
+        // NOTE: OK, so it looks like not all of the zob key fields get xor'ed when doing this
+        // It seems that it is either not updating the en passant hash, or is "updating" it twice
+        hash_test(
+            "rnbqkbnr/pppppp2/8/6pp/8/6PP/PPPPPP2/RNBQKBNR w KQkq g6 0 1",
+            "rnbqkbnr/pppppp2/8/6pp/8/5PPP/PPPPP3/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::F2,
+                1 << Tables::F3,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn pawn_f2f3_no_enpassant_hash() {
+        hash_test(
+            "rnbqkbnr/pppppp2/6p1/7p/8/6PP/PPPPPP2/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppp2/6p1/7p/8/5PPP/PPPPP3/RNBQKBNR b KQkq - 0 1",
+            MoveRep::new(
+                1 << Tables::F2,
+                1 << Tables::F3,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
+    }
+
+    #[test]
+    fn perft_failure_hash() {
+        hash_test(
+            "rnbqkbnr/pppppp2/8/6pp/8/6PP/PPPPPP2/RNBQKBNR w KQkq g6 0 1",
+            "rnbqkbnr/pppppp2/8/6pp/5P2/6PP/PPPPP3/RNBQKBNR b KQkq f3 0 1",
+            MoveRep::new(
+                1 << Tables::F2,
+                1 << Tables::F4,
+                None,
+                PieceType::Pawn,
+                None,
+            ),
+        );
     }
 }

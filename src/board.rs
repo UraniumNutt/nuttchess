@@ -683,6 +683,11 @@ impl BoardState {
                 self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
         }
+        // Now that the en passant target has been handled, clear the en passant hash
+        if self.en_passant_target != 0 {
+            self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
+            self.en_passant_target = 0;
+        }
         // Promotion logic
         if let Some(promotion) = play.promotion {
             match promotion {
@@ -783,7 +788,7 @@ impl BoardState {
                 self.hash ^=
                     zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
             }
-            self.en_passant_target = 0;
+            // self.en_passant_target = 0;
         }
         self.hash ^= zob_keys.side_key;
         self.white_to_move = !self.white_to_move;
@@ -798,7 +803,6 @@ impl BoardState {
             self.move_stack[self.move_stack_pointer - 1].black_kingside_castle_rights,
         );
         let previous_en_passant = self.move_stack[self.move_stack_pointer - 1].en_passant_target;
-        self.pop_state();
         // TODO This might be able to be improved by using 16 castle hashes instead of 4
         if self.white_queenside_castle_rights != previous_castle_rights.0 {
             self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
@@ -813,12 +817,15 @@ impl BoardState {
             self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
         }
 
-        if self.en_passant_target != previous_en_passant {
+        if self.en_passant_target != 0 {
             self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
-            if previous_en_passant != 0 {
-                self.hash ^= zob_keys.enpassant_keys[previous_en_passant.trailing_zeros() as usize];
-            }
         }
+
+        if previous_en_passant != 0 {
+            self.hash ^= zob_keys.enpassant_keys[previous_en_passant.trailing_zeros() as usize];
+        }
+
+        self.pop_state();
         // If the move to unmake is castling do this and return
         if play.promotion == Some(Promotion::Castle) {
             // Swap side to play first
@@ -928,8 +935,9 @@ impl BoardState {
         } else {
             self.set(play.ending_square, play.attacked_type);
             if let Some(attacked) = play.attacked_type {
+                // NOTE, we dont invert the side to move because we have not toggled it back yet
                 self.hash ^= zob_keys.piece_keys
-                    [ZobKeys::match_to_index(attacked, !self.white_to_move)]
+                    [ZobKeys::match_to_index(attacked, self.white_to_move)]
                     [play.ending_square.trailing_zeros() as usize];
             }
         }

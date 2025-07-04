@@ -18,13 +18,29 @@ use std::time::Instant;
 use tt::ZobKeys;
 
 fn main() {
+    let mut board = BoardState::starting_state();
+    let zob_keys = ZobKeys::new();
+    let args: Vec<String> = env::args().collect();
     let mut running = true;
+    // For perft testing
+    // TODO remove?
+    if args.len() == 4 || args.len() == 3 {
+        let depth = args[1].parse::<u64>();
+        let fen = args[2].split(" ");
+        board = BoardState::state_from_fen(fen).unwrap();
+        if args.len() == 4 {
+            let moves = args[3].split(" ");
+            for mv in moves {
+                board.apply_string_move(mv.to_string(), &zob_keys);
+            }
+        }
+        perft(&mut board, depth.unwrap() as usize, &zob_keys);
+        running = false;
+    }
     let log_file = Path::new("foo.txt");
     let mut comm = Comm::create(log_file).unwrap();
 
-    let mut board = BoardState::starting_state();
     let tables = Tables::new();
-    let zob_keys = ZobKeys::new();
     while running {
         let line = comm.engine_in();
         let mut tokens = line.split(" ");
