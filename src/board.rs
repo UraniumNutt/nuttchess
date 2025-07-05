@@ -1,5 +1,5 @@
 // use crate::Tables;
-use crate::eval::{delta_ps_score, get_piece_value, piece_square_score};
+use crate::eval::{delta_ps_score, piece_square_score};
 use crate::tt::ZobKeys;
 use crate::{generate::*, tables::Tables};
 use std::io::{self, Write};

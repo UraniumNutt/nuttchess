@@ -856,7 +856,8 @@ impl Tables {
 
 #[cfg(test)]
 mod tests {
-    use crate::{generate::generate, print_bitboard, BoardState};
+
+    use crate::board::print_bitboard;
 
     use super::*;
 
