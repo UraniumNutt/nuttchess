@@ -572,7 +572,7 @@ impl Tables {
                 let mut rank_loop = rank + 1;
                 let mut file_loop = file - 1;
                 while rank_loop < 7 && file_loop > 0 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop += 1;
                     file_loop -= 1;
                 }
@@ -582,7 +582,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file - 1;
                 while rank_loop > 0 && file_loop > 0 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop -= 1;
                 }
@@ -592,7 +592,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file + 1;
                 while rank_loop > 0 && file_loop < 7 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop += 1;
                 }
@@ -601,7 +601,7 @@ impl Tables {
             let mut rank_loop = rank + 1;
             let mut file_loop = file + 1;
             while rank_loop < 7 && file_loop < 7 {
-                table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                 rank_loop += 1;
                 file_loop += 1;
             }
@@ -850,7 +850,7 @@ impl Tables {
             return -1;
         }
 
-        (bb & !bb + 1).ilog2() as i64
+        (bb & (!bb + 1)).ilog2() as i64
     }
 }
 
@@ -894,11 +894,11 @@ mod tests {
         let test1 = 0x82000000084400;
         let expected1 = 0x82442800284000;
         let result1 = Tables::calculate_relevent_bishop_occupancy(28, test1);
-        println!("Input: {}", test1);
+        println!("Input: {test1}");
         print_bitboard(test1);
-        println!("Expected: {}", expected1);
+        println!("Expected: {expected1}");
         print_bitboard(expected1);
-        println!("Actual: {}", result1);
+        println!("Actual: {result1}");
         print_bitboard(result1);
         assert_eq!(result1, expected1);
     }
@@ -908,11 +908,11 @@ mod tests {
         let test2 = 0x40010000000;
         let expected2 = 0x2040000000000;
         let result2 = Tables::calculate_relevent_bishop_occupancy(56, test2);
-        println!("Input: {}", test2);
+        println!("Input: {test2}");
         print_bitboard(test2);
-        println!("Expected: {}", expected2);
+        println!("Expected: {expected2}");
         print_bitboard(expected2);
-        println!("Actual: {}", result2);
+        println!("Actual: {result2}");
         print_bitboard(result2);
         assert_eq!(result2, expected2);
     }
@@ -922,11 +922,11 @@ mod tests {
         let test3 = 0x8000001000080;
         let expected3 = 0x10a000a11204080;
         let result3 = Tables::calculate_relevent_bishop_occupancy(42, test3);
-        println!("Input: {}", test3);
+        println!("Input: {test3}");
         print_bitboard(test3);
-        println!("Expected: {}", expected3);
+        println!("Expected: {expected3}");
         print_bitboard(expected3);
-        println!("Actual: {}", result3);
+        println!("Actual: {result3}");
         print_bitboard(result3);
         assert_eq!(result3, expected3);
     }

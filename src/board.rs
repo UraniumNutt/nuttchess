@@ -1,4 +1,3 @@
-// use crate::Tables;
 use crate::eval::{delta_ps_score, piece_square_score};
 use crate::tt::ZobKeys;
 use crate::{generate::*, tables::Tables};
@@ -227,7 +226,7 @@ impl BoardState {
                         'Q' => state.white_queens |= shift_value,
                         'K' => state.white_king |= shift_value,
 
-                        _ => return Err(format!("Unexpected character found in {}", character)),
+                        _ => return Err(format!("Unexpected character found in {character}")),
                     }
                     shift_value >>= 1;
                 }
@@ -239,8 +238,7 @@ impl BoardState {
         // Check that the proper number of positions were fed in
         if shift_value != 0 {
             return Err(format!(
-                "Incorect number of positions found (shift_value is {})",
-                shift_value
+                "Incorect number of positions found (shift_value is {shift_value})"
             ));
         }
 
@@ -249,7 +247,7 @@ impl BoardState {
             match side_to_move {
                 "w" => state.white_to_move = true,
                 "b" => state.white_to_move = false,
-                _ => return Err(format!("Invalid side to move \"{}\"", side_to_move)),
+                _ => return Err(format!("Invalid side to move \"{side_to_move}\"")),
             }
         } else {
             return Err("String does not have enough tokens to be a valid fen string".to_string());
@@ -271,8 +269,7 @@ impl BoardState {
                     '-' => continue,
                     _ => {
                         return Err(format!(
-                            "Unknown character \"{}\" found in castle rights field",
-                            character
+                            "Unknown character \"{character}\" found in castle rights field"
                         ))
                     }
                 }
@@ -287,7 +284,6 @@ impl BoardState {
                 // No en passant target
                 state.en_passant_target = 0;
             } else {
-                let mut en_passant_shift = 1;
                 let mut target_chars = en_passant_target.chars();
                 if let (Some(file), Some(rank)) = (target_chars.next(), target_chars.next()) {
                     // Match the rank and file to get the correct mask
@@ -300,16 +296,16 @@ impl BoardState {
                         'c' => 5,
                         'b' => 6,
                         'a' => 7,
-                        _ => return Err(format!("Unrecognized value \"{}\" found in file", file)),
+                        _ => return Err(format!("Unrecognized value \"{file}\" found in file")),
                     };
                     let rank_shift: i32;
                     if let Some(rank_value) = rank.to_digit(10) {
                         rank_shift = rank_value as i32;
                     } else {
-                        return Err(format!("Unrecognized value \"{}\" found in rank", rank));
+                        return Err(format!("Unrecognized value \"{rank}\" found in rank"));
                     }
-                    en_passant_shift = (1 << file_shift) << ((rank_shift - 1) * 8);
-                    state.en_passant_target = en_passant_shift;
+
+                    state.en_passant_target = (1 << file_shift) << ((rank_shift - 1) * 8);
                 } else {
                     return Err(
                         "En passant target does not have the expected number of characters"
@@ -351,6 +347,7 @@ impl BoardState {
         Ok(state)
     }
 
+    #[cfg(test)]
     pub fn state_from_string_fen(fen_string: String) -> BoardState {
         let tokens = fen_string.split(" ");
         BoardState::state_from_fen(tokens).unwrap()
@@ -430,13 +427,13 @@ impl BoardState {
     pub fn pretty_print_board(&self) {
         // TODO This could be improved alot
         fn white_square(piece: &str) -> String {
-            format!("\x1b[48;2;196;187;90m{}\x1b[0m", piece)
+            format!("\x1b[48;2;196;187;90m{piece}\x1b[0m")
         }
         fn black_square(piece: &str) -> String {
-            format!("\x1b[48;2;142;79;15m{}\x1b[0m", piece)
+            format!("\x1b[48;2;142;79;15m{piece}\x1b[0m")
         }
 
-        print!("\n");
+        println!();
         for index in 1..=64 {
             let index = 64 - index;
             // NOTE On my machine, the white chess piece characters look black, so this reflects that
@@ -473,11 +470,11 @@ impl BoardState {
                 _ => {}
             }
             if index % 8 == 0 {
-                print!("\n");
+                println!();
             }
             let _ = io::stdout().flush();
         }
-        print!("\n");
+        println!();
     }
 
     /// Pushes the current non reversible state to the stack
@@ -743,7 +740,7 @@ impl BoardState {
                 self.hash ^= zob_keys.castle_keys[ZobKeys::BLACK_KINGSIDE_INDEX];
             }
         }
-        if play.moved_type == PieceType::King && play.promotion == None {
+        if play.moved_type == PieceType::King && play.promotion.is_none() {
             if self.white_to_move {
                 if self.white_queenside_castle_rights {
                     self.hash ^= zob_keys.castle_keys[ZobKeys::WHITE_QUEENSIDE_INDEX];
@@ -783,12 +780,8 @@ impl BoardState {
                     play.starting_square >> 8
                 }
             }
-        } else {
-            if self.en_passant_target != 0 {
-                self.hash ^=
-                    zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
-            }
-            // self.en_passant_target = 0;
+        } else if self.en_passant_target != 0 {
+            self.hash ^= zob_keys.enpassant_keys[self.en_passant_target.trailing_zeros() as usize];
         }
         self.hash ^= zob_keys.side_key;
         self.white_to_move = !self.white_to_move;
@@ -1028,8 +1021,6 @@ impl BoardState {
                     PieceType::King => self.black_king &= !bb,
                 }
             }
-        } else {
-            return;
         }
     }
 
@@ -1678,7 +1669,8 @@ impl BoardState {
     /// Gets the mask of the pieces pinned to the target
     pub fn pin_mask(&self, tables: &Tables, target: u64, white_to_move: bool) -> u64 {
         let target_index = target.trailing_zeros() as usize;
-        let mask = match white_to_move {
+
+        match white_to_move {
             true => {
                 let mut mask = 0;
                 // Project a rook ray without any blockers
@@ -1757,8 +1749,7 @@ impl BoardState {
                 // Return the mask
                 mask
             }
-        };
-        mask
+        }
     }
 
     // Tests if the target is safe from a ray attack after the move rep
@@ -1820,34 +1811,34 @@ impl BoardState {
     pub fn white_in_stalemate(&self, table: &Tables) -> bool {
         let black_attack_mask = self.black_attack_mask(table);
         let king_attack = table.king_attacks[self.white_king.trailing_zeros() as usize];
-        king_attack & black_attack_mask == king_attack && !self.white_in_check(&table)
+        king_attack & black_attack_mask == king_attack && !self.white_in_check(table)
     }
 
     // Get if black is in stalemate
     pub fn black_in_stalemate(&self, table: &Tables) -> bool {
         let white_attack_mask = self.white_attack_mask(table);
         let king_attack = table.king_attacks[self.black_king.trailing_zeros() as usize];
-        king_attack & white_attack_mask == king_attack && !self.black_in_check(&table)
+        king_attack & white_attack_mask == king_attack && !self.black_in_check(table)
     }
 
     // Get if white is in checkmate
     pub fn white_in_checkmate(&self, table: &Tables) -> bool {
         // FIXME this is very expensive!
         let moves = generate(self, table);
-        moves.len() == 0
+        moves.is_empty()
     }
 
     // Get if black is in checkmate
     pub fn black_in_checkmate(&self, table: &Tables) -> bool {
         // FIXME this is very expensive!
         let moves = generate(self, table);
-        moves.len() == 0
+        moves.is_empty()
     }
 
     // Get if the game is over ie any stale mate, or the number of moves is zero
     pub fn is_over(&self, table: &Tables, number_of_moves: usize) -> bool {
-        self.white_in_stalemate(&table)
-            || self.black_in_stalemate(&table)
+        self.white_in_stalemate(table)
+            || self.black_in_stalemate(table)
             || number_of_moves == 0
             || self.white_in_checkmate(table)
             || self.black_in_checkmate(table)
@@ -1860,18 +1851,18 @@ impl BoardState {
         play: &MoveRep,
         zob_keys: &ZobKeys,
     ) -> bool {
-        self.make(&play, zob_keys);
+        self.make(play, zob_keys);
         let is_safe = !match self.white_to_move {
-            true => self.black_in_check(&table),
-            false => self.white_in_check(&table),
+            true => self.black_in_check(table),
+            false => self.white_in_check(table),
         };
-        self.unmake(&play, zob_keys);
+        self.unmake(play, zob_keys);
         is_safe
     }
 }
 
 impl MoveRep {
-    pub fn to_string(&self) -> Result<String, String> {
+    pub fn to_string(&self) -> String {
         let start = self.starting_square;
         let end = self.ending_square;
         let mut mov = String::new();
@@ -1879,14 +1870,14 @@ impl MoveRep {
         mov.push_str(MoveRep::mask_to_string(end).unwrap().as_ref());
         if self.promotion.is_some() && self.promotion != Some(Promotion::Castle) {
             match self.promotion {
-                Some(Promotion::Queen) => mov.push_str("q"),
-                Some(Promotion::Bishop) => mov.push_str("b"),
-                Some(Promotion::Rook) => mov.push_str("r"),
-                Some(Promotion::Knight) => mov.push_str("n"),
+                Some(Promotion::Queen) => mov.push('q'),
+                Some(Promotion::Bishop) => mov.push('b'),
+                Some(Promotion::Rook) => mov.push('r'),
+                Some(Promotion::Knight) => mov.push('n'),
                 _ => {}
             }
         }
-        Ok(mov)
+        mov
     }
 
     /// Returns if the move is reversible
@@ -1962,13 +1953,13 @@ fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
         'c' => 5,
         'b' => 6,
         'a' => 7,
-        _ => return Err(format!("Unrecognized value \"{}\" found in file", file)),
+        _ => return Err(format!("Unrecognized value \"{file}\" found in file")),
     };
     let rank_shift: i32;
     if let Some(rank_value) = rank.to_digit(10) {
         rank_shift = rank_value as i32;
     } else {
-        return Err(format!("Unrecognized value \"{}\" found in rank", rank));
+        return Err(format!("Unrecognized value \"{rank}\" found in rank"));
     }
     Ok((1 << file_shift) << ((rank_shift - 1) * 8))
 }
@@ -2082,10 +2073,8 @@ pub fn print_bitboard(bb: u64) {
 
 #[cfg(test)]
 mod tests {
-    use core::panic::PanicInfo;
-    use std::fmt::Debug;
 
-    use crate::{generate, tables::Tables};
+    use crate::tables::Tables;
 
     use super::*;
 
@@ -2105,9 +2094,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         pawn_test.make(&move_test, &zob_keys);
 
-        assert_eq!(pawn_test.white_to_move, false);
-        assert_eq!(pawn_test.white_pawns & 1 << Tables::A4 != 0, true);
-        assert_eq!(pawn_test.white_pawns & 1 << Tables::A2 != 0, false);
+        assert!(!pawn_test.white_to_move);
+        assert!(pawn_test.white_pawns & 1 << Tables::A4 != 0);
+        assert!(pawn_test.white_pawns & 1 << Tables::A2 == 0);
     }
 
     #[test]
@@ -2127,9 +2116,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         black_pawn_test.make(&move_test, &zob_keys);
 
-        assert_eq!(black_pawn_test.white_to_move, true);
-        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D7 != 0, false);
-        assert_eq!(black_pawn_test.black_pawns & 1 << Tables::D5 != 0, true);
+        assert!(black_pawn_test.white_to_move);
+        assert!(black_pawn_test.black_pawns & 1 << Tables::D7 == 0);
+        assert!(black_pawn_test.black_pawns & 1 << Tables::D5 != 0);
     }
 
     #[test]
@@ -2149,19 +2138,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         black_pawn_attack_test.make(&move_test, &zob_keys);
 
-        assert_eq!(black_pawn_attack_test.white_to_move, true);
-        assert_eq!(
-            black_pawn_attack_test.black_pawns & 1 << Tables::A7 != 0,
-            false
-        );
-        assert_eq!(
-            black_pawn_attack_test.black_pawns & 1 << Tables::B6 != 0,
-            true
-        );
-        assert_eq!(
-            black_pawn_attack_test.white_pawns & 1 << Tables::B6 != 0,
-            false
-        );
+        assert!(black_pawn_attack_test.white_to_move);
+        assert!(black_pawn_attack_test.black_pawns & 1 << Tables::A7 == 0);
+        assert!(black_pawn_attack_test.black_pawns & 1 << Tables::B6 != 0);
+        assert!(black_pawn_attack_test.white_pawns & 1 << Tables::B6 == 0);
     }
 
     #[test]
@@ -2181,10 +2161,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         pawn_attack_test.make(&move_test, &zob_keys);
 
-        assert_eq!(pawn_attack_test.white_to_move, false);
-        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::B2 != 0, false);
-        assert_eq!(pawn_attack_test.white_pawns & 1 << Tables::C3 != 0, true);
-        assert_eq!(pawn_attack_test.black_pawns & 1 << Tables::C3 != 0, false);
+        assert!(!pawn_attack_test.white_to_move);
+        assert!(pawn_attack_test.white_pawns & 1 << Tables::B2 == 0);
+        assert!(pawn_attack_test.white_pawns & 1 << Tables::C3 != 0);
+        assert!(pawn_attack_test.black_pawns & 1 << Tables::C3 == 0);
     }
 
     #[test]
@@ -2204,9 +2184,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         knight_test.make(&move_test, &zob_keys);
 
-        assert_eq!(knight_test.white_to_move, false);
-        assert_eq!(knight_test.white_knights & 1 << Tables::A3 != 0, true);
-        assert_eq!(knight_test.white_knights & 1 << Tables::B2 != 0, false);
+        assert!(!knight_test.white_to_move);
+        assert!(knight_test.white_knights & 1 << Tables::A3 != 0);
+        assert!(knight_test.white_knights & 1 << Tables::B2 == 0);
     }
 
     #[test]
@@ -2226,12 +2206,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         black_knight_test.make(&move_test, &zob_keys);
 
-        assert_eq!(black_knight_test.white_to_move, true);
-        assert_eq!(
-            black_knight_test.black_knights & 1 << Tables::B8 != 0,
-            false
-        );
-        assert_eq!(black_knight_test.black_knights & 1 << Tables::A6 != 0, true);
+        assert!(black_knight_test.white_to_move);
+        assert!(black_knight_test.black_knights & 1 << Tables::B8 == 0);
+        assert!(black_knight_test.black_knights & 1 << Tables::A6 != 0);
     }
 
     #[test]
@@ -2251,19 +2228,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         white_knight_attack.make(&move_test, &zob_keys);
 
-        assert_eq!(white_knight_attack.white_to_move, false);
-        assert_eq!(
-            white_knight_attack.white_knights & 1 << Tables::B1 != 0,
-            false
-        );
-        assert_eq!(
-            white_knight_attack.white_knights & 1 << Tables::C3 != 0,
-            true
-        );
-        assert_eq!(
-            white_knight_attack.black_pawns & 1 << Tables::C3 != 0,
-            false
-        );
+        assert!(!white_knight_attack.white_to_move);
+        assert!(white_knight_attack.white_knights & 1 << Tables::B1 == 0);
+        assert!(white_knight_attack.white_knights & 1 << Tables::C3 != 0);
+        assert!(white_knight_attack.black_pawns & 1 << Tables::C3 == 0);
     }
 
     #[test]
@@ -2283,19 +2251,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         black_knight_attack_test.make(&move_test, &zob_keys);
 
-        assert_eq!(black_knight_attack_test.white_to_move, true);
-        assert_eq!(
-            black_knight_attack_test.black_knights & 1 << Tables::B8 != 0,
-            false
-        );
-        assert_eq!(
-            black_knight_attack_test.black_knights & 1 << Tables::C6 != 0,
-            true
-        );
-        assert_eq!(
-            black_knight_attack_test.white_pawns & 1 << Tables::C6 != 0,
-            false
-        );
+        assert!(black_knight_attack_test.white_to_move);
+        assert!(black_knight_attack_test.black_knights & 1 << Tables::B8 == 0);
+        assert!(black_knight_attack_test.black_knights & 1 << Tables::C6 != 0);
+        assert!(black_knight_attack_test.white_pawns & 1 << Tables::C6 == 0);
     }
 
     #[test]
@@ -2315,9 +2274,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         board.make(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
-        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, true);
+        assert!(!board.white_to_move);
+        assert!(board.white_rooks & 1 << Tables::A1 == 0);
+        assert!(board.white_rooks & 1 << Tables::A5 != 0);
     }
 
     #[test]
@@ -2336,9 +2295,9 @@ mod tests {
         let zob_keys = ZobKeys::new();
         board.make(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
-        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, true);
+        assert!(board.white_to_move);
+        assert!(board.black_rooks & 1 << Tables::A8 == 0);
+        assert!(board.black_rooks & 1 << Tables::A3 != 0);
     }
 
     #[test]
@@ -2357,10 +2316,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         board.make(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, false);
-        assert_eq!(board.white_rooks & 1 << Tables::A4 != 0, true);
-        assert_eq!(board.black_pawns & 1 << Tables::A4 != 0, false);
+        assert!(!board.white_to_move);
+        assert!(board.white_rooks & 1 << Tables::A1 == 0);
+        assert!(board.white_rooks & 1 << Tables::A4 != 0);
+        assert!(board.black_pawns & 1 << Tables::A4 == 0);
     }
 
     #[test]
@@ -2380,10 +2339,10 @@ mod tests {
         let zob_keys = ZobKeys::new();
         board.make(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, false);
-        assert_eq!(board.black_rooks & 1 << Tables::A4 != 0, true);
-        assert_eq!(board.white_pawns & 1 << Tables::A4 != 0, false);
+        assert!(board.white_to_move);
+        assert!(board.black_rooks & 1 << Tables::A8 == 0);
+        assert!(board.black_rooks & 1 << Tables::A4 != 0);
+        assert!(board.white_pawns & 1 << Tables::A4 == 0);
     }
 
     #[test]
@@ -2403,9 +2362,9 @@ mod tests {
         board.make(&move_test, &zob_keys);
         board.unmake(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
-        assert_eq!(board.white_pawns & 1 << Tables::D4 != 0, false);
+        assert!(board.white_to_move);
+        assert!(board.white_pawns & 1 << Tables::D2 != 0);
+        assert!(board.white_pawns & 1 << Tables::D4 == 0);
     }
 
     #[test]
@@ -2425,11 +2384,11 @@ mod tests {
         board.make(&move_test, &zob_keys);
         board.unmake(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_pawns & 1 << Tables::D2 != 0, true);
-        assert_eq!(board.white_pawns & 1 << Tables::C3 != 0, false);
+        assert!(board.white_to_move);
+        assert!(board.white_pawns & 1 << Tables::D2 != 0);
+        assert!(board.white_pawns & 1 << Tables::C3 == 0);
         print_bitboard(board.black_pawns);
-        assert_eq!(board.black_pawns & 1 << Tables::C3 != 0, true);
+        assert!(board.black_pawns & 1 << Tables::C3 != 0);
     }
 
     #[test]
@@ -2449,9 +2408,9 @@ mod tests {
         board.make(&move_test, &zob_keys);
         board.unmake(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_pawns & 1 << Tables::H7 != 0, true);
-        assert_eq!(board.black_pawns & 1 << Tables::H5 != 0, false);
+        assert!(!board.white_to_move);
+        assert!(board.black_pawns & 1 << Tables::H7 != 0);
+        assert!(board.black_pawns & 1 << Tables::H5 == 0);
     }
 
     #[test]
@@ -2471,10 +2430,10 @@ mod tests {
         board.make(&move_test, &zob_keys);
         board.unmake(&move_test, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_pawns & 1 << Tables::B7 != 0, true);
-        assert_eq!(board.black_pawns & 1 << Tables::A6 != 0, false);
-        assert_eq!(board.white_pawns & 1 << Tables::A6 != 0, true);
+        assert!(!board.white_to_move);
+        assert!(board.black_pawns & 1 << Tables::B7 != 0);
+        assert!(board.black_pawns & 1 << Tables::A6 == 0);
+        assert!(board.white_pawns & 1 << Tables::A6 != 0);
     }
 
     #[test]
@@ -2494,9 +2453,9 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
-        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
+        assert!(board.white_to_move);
+        assert!(board.white_knights & 1 << Tables::G1 != 0);
+        assert!(board.white_knights & 1 << Tables::H3 == 0);
     }
 
     #[test]
@@ -2516,10 +2475,10 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_knights & 1 << Tables::G1 != 0, true);
-        assert_eq!(board.white_knights & 1 << Tables::H3 != 0, false);
-        assert_eq!(board.black_pawns & 1 << Tables::H3 != 0, true);
+        assert!(board.white_to_move);
+        assert!(board.white_knights & 1 << Tables::G1 != 0);
+        assert!(board.white_knights & 1 << Tables::H3 == 0);
+        assert!(board.black_pawns & 1 << Tables::H3 != 0);
     }
 
     #[test]
@@ -2539,9 +2498,9 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
-        assert_eq!(board.black_knights & 1 << Tables::F6 != 0, false);
+        assert!(!board.white_to_move);
+        assert!(board.black_knights & 1 << Tables::G8 != 0);
+        assert!(board.black_knights & 1 << Tables::F6 == 0);
     }
 
     #[test]
@@ -2561,10 +2520,10 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_knights & 1 << Tables::G8 != 0, true);
-        assert_eq!(board.black_knights & 1 << Tables::H6 != 0, false);
-        assert_eq!(board.white_pawns & 1 << Tables::H6 != 0, true);
+        assert!(!board.white_to_move);
+        assert!(board.black_knights & 1 << Tables::G8 != 0);
+        assert!(board.black_knights & 1 << Tables::H6 == 0);
+        assert!(board.white_pawns & 1 << Tables::H6 != 0);
     }
 
     #[test]
@@ -2584,9 +2543,9 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
-        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
+        assert!(board.white_to_move);
+        assert!(board.white_rooks & 1 << Tables::A1 != 0);
+        assert!(board.white_rooks & 1 << Tables::A5 == 0);
     }
 
     #[test]
@@ -2606,10 +2565,10 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, true);
-        assert_eq!(board.white_rooks & 1 << Tables::A1 != 0, true);
-        assert_eq!(board.white_rooks & 1 << Tables::A5 != 0, false);
-        assert_eq!(board.black_pawns & 1 << Tables::A5 != 0, true);
+        assert!(board.white_to_move);
+        assert!(board.white_rooks & 1 << Tables::A1 != 0);
+        assert!(board.white_rooks & 1 << Tables::A5 == 0);
+        assert!(board.black_pawns & 1 << Tables::A5 != 0);
     }
 
     #[test]
@@ -2629,9 +2588,9 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
-        assert_eq!(board.black_rooks & 1 << Tables::A3 != 0, false);
+        assert!(!board.white_to_move);
+        assert!(board.black_rooks & 1 << Tables::A8 != 0);
+        assert!(board.black_rooks & 1 << Tables::A3 == 0);
     }
 
     #[test]
@@ -2651,10 +2610,10 @@ mod tests {
         board.make(&test_move, &zob_keys);
         board.unmake(&test_move, &zob_keys);
 
-        assert_eq!(board.white_to_move, false);
-        assert_eq!(board.black_rooks & 1 << Tables::A8 != 0, true);
-        assert_eq!(board.black_rooks & 1 << Tables::A2 != 0, false);
-        assert_eq!(board.white_pawns & 1 << Tables::A2 != 0, true);
+        assert!(!board.white_to_move);
+        assert!(board.black_rooks & 1 << Tables::A8 != 0);
+        assert!(board.black_rooks & 1 << Tables::A2 == 0);
+        assert!(board.white_pawns & 1 << Tables::A2 != 0);
     }
 
     #[test]
@@ -3009,7 +2968,7 @@ mod tests {
         );
         let zob_keys = ZobKeys::new();
         let result = board.move_safe_for_king(&tables, &play, &zob_keys);
-        assert_eq!(true, result);
+        assert!(result);
     }
 
     #[test]
@@ -3027,7 +2986,7 @@ mod tests {
         );
         let zob_keys = ZobKeys::new();
         let result = board.move_safe_for_king(&tables, &play, &zob_keys);
-        assert_eq!(false, result);
+        assert!(!result);
     }
 
     #[test]
@@ -3045,7 +3004,7 @@ mod tests {
         );
         let zob_keys = ZobKeys::new();
         let result = board.move_safe_for_king(&tables, &play, &zob_keys);
-        assert_eq!(true, result);
+        assert!(result);
     }
 
     #[test]
@@ -3063,7 +3022,7 @@ mod tests {
         );
         let zob_keys = ZobKeys::new();
         let result = board.move_safe_for_king(&tables, &play, &zob_keys);
-        assert_eq!(false, result);
+        assert!(!result);
     }
 
     #[test]
@@ -3077,7 +3036,7 @@ mod tests {
         );
 
         let result = mv.is_reversible();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3091,7 +3050,7 @@ mod tests {
         );
 
         let result = mv.is_reversible();
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -3105,7 +3064,7 @@ mod tests {
         );
 
         let result = mv.is_reversible();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3119,7 +3078,7 @@ mod tests {
         );
 
         let result = mv.is_reversible();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3133,7 +3092,7 @@ mod tests {
         );
 
         let result = mv.is_reversible();
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3226,7 +3185,7 @@ mod tests {
 
     #[test]
     fn test_en_passant_attack_1() {
-        let mut board = BoardState::state_from_string_fen(
+        let board = BoardState::state_from_string_fen(
             "rnbqkbnr/ppp1pppp/8/8/2Pp4/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1".to_string(),
         );
 
@@ -3246,7 +3205,7 @@ mod tests {
 
     #[test]
     fn test_en_passant_attack_2() {
-        let mut board = BoardState::state_from_string_fen(
+        let board = BoardState::state_from_string_fen(
             "rnbqkbnr/ppp1pppp/8/2Pp4/8/8/PP1PPPPP/RNBQKBNR w KQkq d6 0 1".to_string(),
         );
 
@@ -3356,7 +3315,7 @@ mod tests {
         );
 
         let result = board.pin_safe(&tables, target, &mv);
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -3375,7 +3334,7 @@ mod tests {
         );
 
         let result = board.pin_safe(&tables, target, &mv);
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -3394,7 +3353,7 @@ mod tests {
         );
 
         let result = board.pin_safe(&tables, target, &mv);
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3413,7 +3372,7 @@ mod tests {
         );
 
         let result = board.pin_safe(&tables, target, &mv);
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -3432,7 +3391,7 @@ mod tests {
         );
 
         let result = board.pin_safe(&tables, target, &mv);
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -3452,14 +3411,14 @@ mod tests {
         board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::G1);
         assert_eq!(board.white_rooks & 1 << Tables::F1, 1 << Tables::F1);
-        assert_eq!(board.white_kingside_castle_rights, false);
-        assert_eq!(board.white_queenside_castle_rights, false);
+        assert!(!board.white_kingside_castle_rights);
+        assert!(!board.white_queenside_castle_rights);
 
         board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::H1, 1 << Tables::H1);
-        assert_eq!(board.white_kingside_castle_rights, true);
-        assert_eq!(board.white_queenside_castle_rights, true);
+        assert!(board.white_kingside_castle_rights);
+        assert!(board.white_queenside_castle_rights);
     }
     #[test]
     fn test_white_queenside_castle() {
@@ -3478,14 +3437,14 @@ mod tests {
         board.make(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::C1);
         assert_eq!(board.white_rooks & 1 << Tables::D1, 1 << Tables::D1);
-        assert_eq!(board.white_kingside_castle_rights, false);
-        assert_eq!(board.white_queenside_castle_rights, false);
+        assert!(!board.white_kingside_castle_rights);
+        assert!(!board.white_queenside_castle_rights);
 
         board.unmake(&mv, &zob_keys);
         assert_eq!(board.white_king, 1 << Tables::E1);
         assert_eq!(board.white_rooks & 1 << Tables::A1, 1 << Tables::A1);
-        assert_eq!(board.white_kingside_castle_rights, true);
-        assert_eq!(board.white_queenside_castle_rights, true);
+        assert!(board.white_kingside_castle_rights);
+        assert!(board.white_queenside_castle_rights);
     }
     #[test]
     fn test_black_kingside_castle() {
@@ -3504,14 +3463,14 @@ mod tests {
         board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::G8);
         assert_eq!(board.black_rooks & 1 << Tables::F8, 1 << Tables::F8);
-        assert_eq!(board.black_kingside_castle_rights, false);
-        assert_eq!(board.black_queenside_castle_rights, false);
+        assert!(!board.black_kingside_castle_rights);
+        assert!(!board.black_queenside_castle_rights);
 
         board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::H8, 1 << Tables::H8);
-        assert_eq!(board.black_kingside_castle_rights, true);
-        assert_eq!(board.black_queenside_castle_rights, true);
+        assert!(board.black_kingside_castle_rights);
+        assert!(board.black_queenside_castle_rights);
     }
     #[test]
     fn test_black_queenside_castle() {
@@ -3530,14 +3489,14 @@ mod tests {
         board.make(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::C8);
         assert_eq!(board.black_rooks & 1 << Tables::D8, 1 << Tables::D8);
-        assert_eq!(board.black_kingside_castle_rights, false);
-        assert_eq!(board.black_queenside_castle_rights, false);
+        assert!(!board.black_kingside_castle_rights);
+        assert!(!board.black_queenside_castle_rights);
 
         board.unmake(&mv, &zob_keys);
         assert_eq!(board.black_king, 1 << Tables::E8);
         assert_eq!(board.black_rooks & 1 << Tables::A8, 1 << Tables::A8);
-        assert_eq!(board.black_kingside_castle_rights, true);
-        assert_eq!(board.black_queenside_castle_rights, true);
+        assert!(board.black_kingside_castle_rights);
+        assert!(board.black_queenside_castle_rights);
     }
     #[test]
     fn test_white_remove_kingside_castle_rights() {
@@ -3555,8 +3514,8 @@ mod tests {
         );
         let zob_keys = ZobKeys::new();
         board.make(&kingside_rook_move, &zob_keys);
-        assert_eq!(board.white_kingside_castle_rights, false);
-        assert_eq!(board.white_queenside_castle_rights, true);
+        assert!(!board.white_kingside_castle_rights);
+        assert!(board.white_queenside_castle_rights);
     }
     #[test]
     fn test_white_remove_queenside_castle_right() {
@@ -3575,8 +3534,8 @@ mod tests {
 
         let zob_keys = ZobKeys::new();
         board.make(&queenside_rook_move, &zob_keys);
-        assert_eq!(board.white_kingside_castle_rights, true);
-        assert_eq!(board.white_queenside_castle_rights, false);
+        assert!(board.white_kingside_castle_rights);
+        assert!(!board.white_queenside_castle_rights);
     }
     #[test]
     fn test_white_remove_all_castle_rights() {
@@ -3595,8 +3554,8 @@ mod tests {
 
         let zob_keys = ZobKeys::new();
         board.make(&king_move, &zob_keys);
-        assert_eq!(board.white_kingside_castle_rights, false);
-        assert_eq!(board.white_queenside_castle_rights, false);
+        assert!(!board.white_kingside_castle_rights);
+        assert!(!board.white_queenside_castle_rights);
     }
     #[test]
     fn test_black_remove_kingside_castle_rights() {
@@ -3615,8 +3574,8 @@ mod tests {
 
         let zob_keys = ZobKeys::new();
         board.make(&kingside_rook_move, &zob_keys);
-        assert_eq!(board.black_kingside_castle_rights, false);
-        assert_eq!(board.black_queenside_castle_rights, true);
+        assert!(!board.black_kingside_castle_rights);
+        assert!(board.black_queenside_castle_rights);
     }
     #[test]
     fn test_black_remove_queenside_castle_right() {
@@ -3635,8 +3594,8 @@ mod tests {
 
         let zob_keys = ZobKeys::new();
         board.make(&queenside_rook_move, &zob_keys);
-        assert_eq!(board.black_kingside_castle_rights, true);
-        assert_eq!(board.black_queenside_castle_rights, false);
+        assert!(board.black_kingside_castle_rights);
+        assert!(!board.black_queenside_castle_rights);
     }
     #[test]
     fn test_black_remove_all_castle_rights() {
@@ -3655,8 +3614,8 @@ mod tests {
 
         let zob_keys = ZobKeys::new();
         board.make(&king_move, &zob_keys);
-        assert_eq!(board.black_kingside_castle_rights, false);
-        assert_eq!(board.black_queenside_castle_rights, false);
+        assert!(!board.black_kingside_castle_rights);
+        assert!(!board.black_queenside_castle_rights);
     }
 
     #[test]
@@ -3686,7 +3645,7 @@ mod tests {
         let tables = Tables::new();
 
         let stalemate = board.white_in_stalemate(&tables);
-        assert_eq!(stalemate, true);
+        assert!(stalemate);
     }
 
     #[test]
@@ -3696,7 +3655,7 @@ mod tests {
         let tables = Tables::new();
 
         let stalemate = board.white_in_stalemate(&tables);
-        assert_eq!(stalemate, false);
+        assert!(!stalemate);
     }
 
     #[test]
@@ -3706,7 +3665,7 @@ mod tests {
         let tables = Tables::new();
 
         let stalemate = board.black_in_stalemate(&tables);
-        assert_eq!(stalemate, true);
+        assert!(stalemate);
     }
 
     #[test]
@@ -3716,6 +3675,6 @@ mod tests {
         let tables = Tables::new();
 
         let stalemate = board.black_in_stalemate(&tables);
-        assert_eq!(stalemate, false);
+        assert!(!stalemate);
     }
 }

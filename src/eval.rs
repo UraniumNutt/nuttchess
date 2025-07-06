@@ -135,7 +135,7 @@ pub fn material_value(board: &BoardState) -> isize {
         board.white_rooks.count_ones() as isize - board.black_rooks.count_ones() as isize;
     let bishop_delta =
         board.white_bishops.count_ones() as isize - board.black_bishops.count_ones() as isize;
-    let knight_delta = board.white_knights.count_ones() as isize as isize
+    let knight_delta = board.white_knights.count_ones() as isize
         - board.black_knights.count_ones() as isize;
     let pawn_delta =
         board.white_pawns.count_ones() as isize - board.black_pawns.count_ones() as isize;
@@ -148,9 +148,9 @@ pub fn material_value(board: &BoardState) -> isize {
         + KNIGHT * knight_delta
         + PAWN * pawn_delta;
     if board.white_to_move {
-        return white_relative_value;
+        white_relative_value
     } else {
-        return -white_relative_value;
+        -white_relative_value
     }
 }
 
@@ -211,8 +211,8 @@ pub fn piece_square_score(board: &BoardState) -> isize {
     }
 
     match board.white_to_move {
-        true => (white_score - black_score) as isize,
-        false => (black_score - white_score) as isize,
+        true => white_score - black_score,
+        false => black_score - white_score,
     }
 }
 
@@ -223,21 +223,21 @@ pub fn get_piece_value(board: &BoardState, mask: u64) -> isize {
         let white_index = WHITE_MAP[mask.trailing_zeros() as usize];
         let black_index = BLACK_MAP[mask.trailing_zeros() as usize];
         match piece_color {
-            (PieceType::Pawn, true) => PAWN_TABLE[white_index] as isize,
-            (PieceType::Knight, true) => KNIGHT_TABLE[white_index] as isize,
-            (PieceType::Bishop, true) => BISHOP_TABLE[white_index] as isize,
-            (PieceType::Rook, true) => ROOK_TABLE[white_index] as isize,
-            (PieceType::Queen, true) => QUEEN_TABLE[white_index] as isize,
-            (PieceType::King, true) => KING_TABLE[white_index] as isize,
-            (PieceType::Pawn, false) => PAWN_TABLE[black_index] as isize,
-            (PieceType::Knight, false) => KNIGHT_TABLE[black_index] as isize,
-            (PieceType::Bishop, false) => BISHOP_TABLE[black_index] as isize,
-            (PieceType::Rook, false) => ROOK_TABLE[black_index] as isize,
-            (PieceType::Queen, false) => QUEEN_TABLE[black_index] as isize,
-            (PieceType::King, false) => KING_TABLE[black_index] as isize,
+            (PieceType::Pawn, true) => PAWN_TABLE[white_index],
+            (PieceType::Knight, true) => KNIGHT_TABLE[white_index],
+            (PieceType::Bishop, true) => BISHOP_TABLE[white_index],
+            (PieceType::Rook, true) => ROOK_TABLE[white_index],
+            (PieceType::Queen, true) => QUEEN_TABLE[white_index],
+            (PieceType::King, true) => KING_TABLE[white_index],
+            (PieceType::Pawn, false) => PAWN_TABLE[black_index],
+            (PieceType::Knight, false) => KNIGHT_TABLE[black_index],
+            (PieceType::Bishop, false) => BISHOP_TABLE[black_index],
+            (PieceType::Rook, false) => ROOK_TABLE[black_index],
+            (PieceType::Queen, false) => QUEEN_TABLE[black_index],
+            (PieceType::King, false) => KING_TABLE[black_index],
         }
     } else {
-        return 0;
+        0
     }
 }
 
@@ -1108,7 +1108,7 @@ mod tests {
         let mut board = BoardState::starting_state();
         let init_score = board.piece_square_score;
         let zob_keys = ZobKeys::new();
-        let _ = perft(&mut board, 5, &zob_keys);
+        perft(&mut board, 5, &zob_keys);
         assert_eq!(board.piece_square_score, init_score);
     }
 }

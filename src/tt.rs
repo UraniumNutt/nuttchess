@@ -140,15 +140,15 @@ impl ZobKeys {
     fn print_keys(&self) {
         for piece_type in self.piece_keys {
             for key in piece_type {
-                println!("{:#018x}", key);
+                println!("{key:#018x}");
             }
         }
         for key in self.enpassant_keys {
-            println!("{:#018x}", key);
+            println!("{key:#018x}");
         }
 
         for key in self.castle_keys {
-            println!("{:#018x}", key);
+            println!("{key:#018x}");
         }
 
         println!("{:#018x}", self.side_key);
@@ -185,7 +185,7 @@ mod tests {
 
     fn hash_test(starting_board: &str, final_board: &str, mv: MoveRep) {
         let mut starting_board = BoardState::state_from_string_fen(starting_board.to_string());
-        let mut final_board = BoardState::state_from_string_fen(final_board.to_string());
+        let final_board = BoardState::state_from_string_fen(final_board.to_string());
 
         let zob_keys = &ZobKeys::new();
         let initial_hash = starting_board.hash;
@@ -211,9 +211,9 @@ mod tests {
         let moves = generate(board, tables);
         for mv in moves {
             let starting_hash = board.hash;
-            board.make(&mv, &zob_keys);
-            perft_hash_child(board, tables, &zob_keys, depth - 1);
-            board.unmake(&mv, &zob_keys);
+            board.make(&mv, zob_keys);
+            perft_hash_child(board, tables, zob_keys, depth - 1);
+            board.unmake(&mv, zob_keys);
             let final_hash = board.hash;
             assert_eq!(starting_hash, final_hash);
         }
