@@ -1,6 +1,25 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
+#[allow(dead_code)]
 pub struct Tables {
     // Look up table for attack bitboards
     pub white_pawn_attacks: [u64; 64],
@@ -19,6 +38,7 @@ pub struct Tables {
     pub rook_attacks: Vec<Vec<u64>>,
     pub bishop_attacks: Vec<Vec<u64>>,
 }
+#[allow(dead_code)]
 impl Tables {
     // constants for board indicies
     // rank 1
@@ -572,7 +592,7 @@ impl Tables {
                 let mut rank_loop = rank + 1;
                 let mut file_loop = file - 1;
                 while rank_loop < 7 && file_loop > 0 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop += 1;
                     file_loop -= 1;
                 }
@@ -582,7 +602,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file - 1;
                 while rank_loop > 0 && file_loop > 0 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop -= 1;
                 }
@@ -592,7 +612,7 @@ impl Tables {
                 let mut rank_loop = rank - 1;
                 let mut file_loop = file + 1;
                 while rank_loop > 0 && file_loop < 7 {
-                    table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                    table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                     rank_loop -= 1;
                     file_loop += 1;
                 }
@@ -601,7 +621,7 @@ impl Tables {
             let mut rank_loop = rank + 1;
             let mut file_loop = file + 1;
             while rank_loop < 7 && file_loop < 7 {
-                table[shift_value as usize] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
+                table[shift_value] |= 1 << Tables::rf_to_index(rank_loop, file_loop);
                 rank_loop += 1;
                 file_loop += 1;
             }
@@ -741,14 +761,13 @@ impl Tables {
         mapped
     }
 
-    // Generate a magic number: will only use this make pregenerated tables
+    /// Generate a magic number: will only use this make pregenerated tables
     pub fn generate_magic(
         attack_mask: u64,
         square_index: usize,
         bit_count: u64,
         calculate_relevent: &dyn Fn(usize, u64) -> u64,
     ) -> u64 {
-        // let bit_count = attack_mask.count_ones() as u64;
         // The number of permutations of occupancies
         let attack_permutations = 1 << bit_count;
         // The permutations of occupancies
@@ -795,36 +814,38 @@ impl Tables {
     }
 
     // If we ever need to regenerate some magics:
-    // let mut rook_magics = [0; 64];
-    // let mut bishop_magics = [0; 64];
-    // let mut rook_mask = [0; 64];
-    // let mut bishop_mask = [0; 64];
-    // Tables::generate_rook_occupancy_mask(&mut rook_mask);
-    // Tables::generate_bishop_occupancy_mask(&mut bishop_mask);
-    // for square in 0..64 {
-    //     rook_magics[square] = Tables::generate_magic(
-    //         rook_mask[square],
-    //         square,
-    //         rook_mask[square].count_ones() as u64,
-    //         &Tables::calculate_relevent_rook_occupancy,
-    //     );
-    //     bishop_magics[square] = Tables::generate_magic(
-    //         bishop_mask[square],
-    //         square,
-    //         bishop_mask[square].count_ones() as u64,
-    //         &Tables::calculate_relevent_bishop_occupancy,
-    //     );
-    // }
+    fn gen_magics() {
+        let mut rook_magics = [0; 64];
+        let mut bishop_magics = [0; 64];
+        let mut rook_mask = [0; 64];
+        let mut bishop_mask = [0; 64];
+        Tables::generate_rook_occupancy_mask(&mut rook_mask);
+        Tables::generate_bishop_occupancy_mask(&mut bishop_mask);
+        for square in 0..64 {
+            rook_magics[square] = Tables::generate_magic(
+                rook_mask[square],
+                square,
+                rook_mask[square].count_ones() as u64,
+                &Tables::calculate_relevent_rook_occupancy,
+            );
+            bishop_magics[square] = Tables::generate_magic(
+                bishop_mask[square],
+                square,
+                bishop_mask[square].count_ones() as u64,
+                &Tables::calculate_relevent_bishop_occupancy,
+            );
+        }
 
-    // println!("Rook magics: ");
-    // for square in 0..64 {
-    //     println!("{:#018x}", rook_magics[square]);
-    // }
+        println!("Rook magics: ");
+        for magic in &rook_magics {
+            println!("{:#018x}", magic);
+        }
 
-    // println!("Bishop magics: ");
-    // for square in 0..64 {
-    //     println!("{:#018x}", bishop_magics[square]);
-    // }
+        println!("Bishop magics: ");
+        for magic in &bishop_magics {
+            println!("{:#018x}", magic);
+        }
+    }
 
     fn apply_magic_hash(magic: u64, bit_count: u64, mask: u64) -> u64 {
         mask.wrapping_mul(magic) >> (64 - bit_count)
@@ -850,13 +871,14 @@ impl Tables {
             return -1;
         }
 
-        (bb & !bb + 1).ilog2() as i64
+        (bb & (!bb + 1)).ilog2() as i64
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{generate::generate, print_bitboard, BoardState};
+
+    use crate::board::print_bitboard;
 
     use super::*;
 
@@ -893,11 +915,11 @@ mod tests {
         let test1 = 0x82000000084400;
         let expected1 = 0x82442800284000;
         let result1 = Tables::calculate_relevent_bishop_occupancy(28, test1);
-        println!("Input: {}", test1);
+        println!("Input: {test1}");
         print_bitboard(test1);
-        println!("Expected: {}", expected1);
+        println!("Expected: {expected1}");
         print_bitboard(expected1);
-        println!("Actual: {}", result1);
+        println!("Actual: {result1}");
         print_bitboard(result1);
         assert_eq!(result1, expected1);
     }
@@ -907,11 +929,11 @@ mod tests {
         let test2 = 0x40010000000;
         let expected2 = 0x2040000000000;
         let result2 = Tables::calculate_relevent_bishop_occupancy(56, test2);
-        println!("Input: {}", test2);
+        println!("Input: {test2}");
         print_bitboard(test2);
-        println!("Expected: {}", expected2);
+        println!("Expected: {expected2}");
         print_bitboard(expected2);
-        println!("Actual: {}", result2);
+        println!("Actual: {result2}");
         print_bitboard(result2);
         assert_eq!(result2, expected2);
     }
@@ -921,11 +943,11 @@ mod tests {
         let test3 = 0x8000001000080;
         let expected3 = 0x10a000a11204080;
         let result3 = Tables::calculate_relevent_bishop_occupancy(42, test3);
-        println!("Input: {}", test3);
+        println!("Input: {test3}");
         print_bitboard(test3);
-        println!("Expected: {}", expected3);
+        println!("Expected: {expected3}");
         print_bitboard(expected3);
-        println!("Actual: {}", result3);
+        println!("Actual: {result3}");
         print_bitboard(result3);
         assert_eq!(result3, expected3);
     }
