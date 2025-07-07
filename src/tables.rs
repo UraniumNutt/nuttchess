@@ -1,6 +1,25 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
+#[allow(dead_code)]
 pub struct Tables {
     // Look up table for attack bitboards
     pub white_pawn_attacks: [u64; 64],
@@ -19,6 +38,7 @@ pub struct Tables {
     pub rook_attacks: Vec<Vec<u64>>,
     pub bishop_attacks: Vec<Vec<u64>>,
 }
+#[allow(dead_code)]
 impl Tables {
     // constants for board indicies
     // rank 1
@@ -741,14 +761,13 @@ impl Tables {
         mapped
     }
 
-    // Generate a magic number: will only use this make pregenerated tables
+    /// Generate a magic number: will only use this make pregenerated tables
     pub fn generate_magic(
         attack_mask: u64,
         square_index: usize,
         bit_count: u64,
         calculate_relevent: &dyn Fn(usize, u64) -> u64,
     ) -> u64 {
-        // let bit_count = attack_mask.count_ones() as u64;
         // The number of permutations of occupancies
         let attack_permutations = 1 << bit_count;
         // The permutations of occupancies
@@ -795,36 +814,38 @@ impl Tables {
     }
 
     // If we ever need to regenerate some magics:
-    // let mut rook_magics = [0; 64];
-    // let mut bishop_magics = [0; 64];
-    // let mut rook_mask = [0; 64];
-    // let mut bishop_mask = [0; 64];
-    // Tables::generate_rook_occupancy_mask(&mut rook_mask);
-    // Tables::generate_bishop_occupancy_mask(&mut bishop_mask);
-    // for square in 0..64 {
-    //     rook_magics[square] = Tables::generate_magic(
-    //         rook_mask[square],
-    //         square,
-    //         rook_mask[square].count_ones() as u64,
-    //         &Tables::calculate_relevent_rook_occupancy,
-    //     );
-    //     bishop_magics[square] = Tables::generate_magic(
-    //         bishop_mask[square],
-    //         square,
-    //         bishop_mask[square].count_ones() as u64,
-    //         &Tables::calculate_relevent_bishop_occupancy,
-    //     );
-    // }
+    fn gen_magics() {
+        let mut rook_magics = [0; 64];
+        let mut bishop_magics = [0; 64];
+        let mut rook_mask = [0; 64];
+        let mut bishop_mask = [0; 64];
+        Tables::generate_rook_occupancy_mask(&mut rook_mask);
+        Tables::generate_bishop_occupancy_mask(&mut bishop_mask);
+        for square in 0..64 {
+            rook_magics[square] = Tables::generate_magic(
+                rook_mask[square],
+                square,
+                rook_mask[square].count_ones() as u64,
+                &Tables::calculate_relevent_rook_occupancy,
+            );
+            bishop_magics[square] = Tables::generate_magic(
+                bishop_mask[square],
+                square,
+                bishop_mask[square].count_ones() as u64,
+                &Tables::calculate_relevent_bishop_occupancy,
+            );
+        }
 
-    // println!("Rook magics: ");
-    // for square in 0..64 {
-    //     println!("{:#018x}", rook_magics[square]);
-    // }
+        println!("Rook magics: ");
+        for magic in &rook_magics {
+            println!("{:#018x}", magic);
+        }
 
-    // println!("Bishop magics: ");
-    // for square in 0..64 {
-    //     println!("{:#018x}", bishop_magics[square]);
-    // }
+        println!("Bishop magics: ");
+        for magic in &bishop_magics {
+            println!("{:#018x}", magic);
+        }
+    }
 
     fn apply_magic_hash(magic: u64, bit_count: u64, mask: u64) -> u64 {
         mask.wrapping_mul(magic) >> (64 - bit_count)

@@ -1,10 +1,25 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
-use crate::{
-    board::{BoardState, PieceType},
-    tables::Tables,
-};
+use crate::board::{BoardState, PieceType};
 
 pub struct ZobKeys {
     // Piece order:
@@ -134,41 +149,6 @@ impl ZobKeys {
             hash ^= self.enpassant_keys[board.en_passant_target.trailing_zeros() as usize];
         }
         hash
-    }
-
-    /// Debuging function to print the keys in the table
-    fn print_keys(&self) {
-        for piece_type in self.piece_keys {
-            for key in piece_type {
-                println!("{key:#018x}");
-            }
-        }
-        for key in self.enpassant_keys {
-            println!("{key:#018x}");
-        }
-
-        for key in self.castle_keys {
-            println!("{key:#018x}");
-        }
-
-        println!("{:#018x}", self.side_key);
-    }
-
-    /// Debuging function to get some important keys
-    fn print_special_keys(&self) {
-        println!(
-            "The en passant key of G6 is {:#018x}",
-            self.enpassant_keys[Tables::G6 as usize]
-        );
-        println!(
-            "The starting square key is {:#018x}",
-            self.piece_keys[Self::WHITE_PAWN_INDEX][Tables::F2 as usize]
-        );
-        println!(
-            "The ending square key is {:#018x}",
-            self.piece_keys[Self::WHITE_PAWN_INDEX][Tables::F3 as usize]
-        );
-        println!("The side to mvoe key is {:#018x}", self.side_key);
     }
 }
 

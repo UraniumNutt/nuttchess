@@ -1,3 +1,21 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use crate::eval::{delta_ps_score, piece_square_score};
 use crate::tt::ZobKeys;
 use crate::{generate::*, tables::Tables};
@@ -1235,30 +1253,6 @@ impl BoardState {
         attack_mask
     }
 
-    // Get the pawn attack mask of white
-    pub fn white_pawn_attack_mask(&self, tables: &Tables) -> u64 {
-        let mut attack_mask = 0;
-
-        let mut pawn_bb = self.white_pawns;
-        while pawn_bb != 0 {
-            let start_square = pop_lsb(&mut pawn_bb);
-            attack_mask |= tables.white_pawn_attacks[start_square];
-        }
-        attack_mask
-    }
-
-    // Get the pawn attack mask of black
-    pub fn black_pawn_attack_mask(&self, tables: &Tables) -> u64 {
-        let mut attack_mask = 0;
-
-        let mut pawn_bb = self.black_pawns;
-        while pawn_bb != 0 {
-            let start_square = pop_lsb(&mut pawn_bb);
-            attack_mask |= tables.black_pawn_attacks[start_square];
-        }
-        attack_mask
-    }
-
     // Get the attack map of white with transparency
     pub fn white_attack_mask_with_transparency(&self, tables: &Tables, transparency: u64) -> u64 {
         let mut attack_mask = 0;
@@ -1329,27 +1323,6 @@ impl BoardState {
         while king_bb != 0 {
             let start_square = pop_lsb(&mut king_bb);
             attack_mask |= tables.king_attacks[start_square];
-        }
-
-        attack_mask
-    }
-
-    // Gets the attack mask of only the white leapers
-    pub fn white_leaper_attack_mask(&self, tables: &Tables) -> u64 {
-        let mut attack_mask = 0;
-
-        // White pawns
-        let mut pawn_bb = self.white_pawns;
-        while pawn_bb != 0 {
-            let start_square = pop_lsb(&mut pawn_bb);
-            attack_mask |= tables.white_pawn_attacks[start_square];
-        }
-
-        // White knights
-        let mut knight_bb = self.white_knights;
-        while knight_bb != 0 {
-            let start_square = pop_lsb(&mut knight_bb);
-            attack_mask |= tables.knight_attacks[start_square];
         }
 
         attack_mask
@@ -1501,27 +1474,6 @@ impl BoardState {
         attack_mask
     }
 
-    // Gets the attack mask of only the black leapers
-    pub fn black_leaper_attack_mask(&self, tables: &Tables) -> u64 {
-        let mut attack_mask = 0;
-
-        // black pawns
-        let mut pawn_bb = self.black_pawns;
-        while pawn_bb != 0 {
-            let start_square = pop_lsb(&mut pawn_bb);
-            attack_mask |= tables.black_pawn_attacks[start_square];
-        }
-
-        // black knights
-        let mut knight_bb = self.black_knights;
-        while knight_bb != 0 {
-            let start_square = pop_lsb(&mut knight_bb);
-            attack_mask |= tables.knight_attacks[start_square];
-        }
-
-        attack_mask
-    }
-
     // Gets the mask of the white pieces that attack the given piece mask
     pub fn white_attacking(&self, tables: &Tables, target: u64) -> u64 {
         // attacking mask
@@ -1529,18 +1481,9 @@ impl BoardState {
         // turn the piece mask into an index
         let piece_index = target.trailing_zeros() as usize;
 
-        // TODO add en passant attacks
-        // FIXME Should this even be done here? Since only a pawn can do an en passant attack,
-        // If this function added en passant to the mask, we would just need extra logic somewere else anyway
-
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
         attacking_mask |= tables.black_pawn_attacks[piece_index] & self.white_pawns;
-        // Check en passant attacks
-        // if self.en_passant_target >> 8 == target {
-        //     let en_passant_index = self.en_passant_target.trailing_zeros() as usize;
-        //     attacking_mask |= tables.black_pawn_attacks[en_passant_index] & self.white_pawns;
-        // }
         // Check attacking knights
         attacking_mask |= tables.knight_attacks[piece_index] & self.white_knights;
         // Check attacking rooks
@@ -1601,18 +1544,9 @@ impl BoardState {
         // turn the piece mask into an index
         let piece_index = target.trailing_zeros() as usize;
 
-        // TODO add en passant attacks
-        // FIXME Should this even be done here? Since only a pawn can do an en passant attack,
-        // If this function added en passant to the mask, we would just need extra logic somewere else anyway
-
         // Check attacking pawns
         // NOTE this case is diffrent from the rest since pawn moves are not reversible / symetric
         attacking_mask |= tables.white_pawn_attacks[piece_index] & self.black_pawns;
-        // Check en passant attacks
-        // if self.en_passant_target << 8 == target {
-        //     let en_passant_index = self.en_passant_target.trailing_zeros() as usize;
-        //     attacking_mask |= tables.white_pawn_attacks[en_passant_index] & self.black_pawns;
-        // }
         // Check attacking knights
         attacking_mask |= tables.knight_attacks[piece_index] & self.black_knights;
         // Check attacking rooks
@@ -1756,19 +1690,18 @@ impl BoardState {
     pub fn pin_safe(&self, tables: &Tables, target: u64, mv: &MoveRep) -> bool {
         // TODO Add special handling for en passant moves, because they can reveal an attack!
         // The occupancy after the move would be made
-        let after_occupancy;
+        // let after_occupancy;
         // Special en passant logic
-        if mv.ending_square == self.en_passant_target {
+        let after_occupancy = if mv.ending_square == self.en_passant_target {
             let en_passant_attacked = match self.white_to_move {
                 true => mv.ending_square >> 8,
                 false => mv.ending_square << 8,
             };
-            after_occupancy =
-                self.occupancy() & !mv.starting_square & !en_passant_attacked | mv.ending_square;
+            self.occupancy() & !mv.starting_square & !en_passant_attacked | mv.ending_square
         } else {
             // Normal case
-            after_occupancy = self.occupancy() & !mv.starting_square | mv.ending_square;
-        }
+            self.occupancy() & !mv.starting_square | mv.ending_square
+        };
         let target_index = target.trailing_zeros() as usize;
         // A move which attacks the attacker is safe, unless the attackers space is also under attack
 
@@ -1795,56 +1728,36 @@ impl BoardState {
         true
     }
 
-    // Get if the white king is in check
+    /// Get if the white king is in check
     pub fn white_in_check(&self, table: &Tables) -> bool {
         let black_attack_mask = self.black_attack_mask(table);
         black_attack_mask & self.white_king != 0
     }
 
-    // Get if the black king is in check
+    /// Get if the black king is in check
     pub fn black_in_check(&self, table: &Tables) -> bool {
         let white_attack_mask = self.white_attack_mask(table);
         white_attack_mask & self.black_king != 0
     }
 
-    // Get if white is in stalemate
+    /// Get if white is in stalemate
+    #[cfg(test)]
     pub fn white_in_stalemate(&self, table: &Tables) -> bool {
         let black_attack_mask = self.black_attack_mask(table);
         let king_attack = table.king_attacks[self.white_king.trailing_zeros() as usize];
         king_attack & black_attack_mask == king_attack && !self.white_in_check(table)
     }
 
-    // Get if black is in stalemate
+    /// Get if black is in stalemate
+    #[cfg(test)]
     pub fn black_in_stalemate(&self, table: &Tables) -> bool {
         let white_attack_mask = self.white_attack_mask(table);
         let king_attack = table.king_attacks[self.black_king.trailing_zeros() as usize];
         king_attack & white_attack_mask == king_attack && !self.black_in_check(table)
     }
 
-    // Get if white is in checkmate
-    pub fn white_in_checkmate(&self, table: &Tables) -> bool {
-        // FIXME this is very expensive!
-        let moves = generate(self, table);
-        moves.is_empty()
-    }
-
-    // Get if black is in checkmate
-    pub fn black_in_checkmate(&self, table: &Tables) -> bool {
-        // FIXME this is very expensive!
-        let moves = generate(self, table);
-        moves.is_empty()
-    }
-
-    // Get if the game is over ie any stale mate, or the number of moves is zero
-    pub fn is_over(&self, table: &Tables, number_of_moves: usize) -> bool {
-        self.white_in_stalemate(table)
-            || self.black_in_stalemate(table)
-            || number_of_moves == 0
-            || self.white_in_checkmate(table)
-            || self.black_in_checkmate(table)
-    }
-
     // Checks that the move will not result in check
+    #[cfg(test)]
     pub fn move_safe_for_king(
         &mut self,
         table: &Tables,
@@ -1881,6 +1794,7 @@ impl MoveRep {
     }
 
     /// Returns if the move is reversible
+    #[cfg(test)]
     pub fn is_reversible(&self) -> bool {
         // If there is a piece captured, it is not reversible
         if self.attacked_type.is_some() {
@@ -1964,6 +1878,7 @@ fn position_to_mask(file: char, rank: char) -> Result<u64, String> {
     Ok((1 << file_shift) << ((rank_shift - 1) * 8))
 }
 
+#[allow(dead_code)]
 pub fn print_bitboard(bb: u64) {
     fn get_bit(bb: u64, index: u64) -> char {
         match bb & 1 << index {
@@ -2929,6 +2844,7 @@ mod tests {
         let tables = Tables::new();
         let expected = 1 << Tables::B4;
         let result = board.black_attacking(&tables, 1 << Tables::E1);
+        assert_eq!(expected, result);
     }
 
     #[test]
@@ -3229,8 +3145,6 @@ mod tests {
             "rnbqkbnr/p1pppppp/8/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 1".to_string(),
         );
 
-        let tables = Tables::new();
-
         let expected_mv = MoveRep::new(
             1 << Tables::A5,
             1 << Tables::B6,
@@ -3399,7 +3313,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/Q7/3BPN2/PP1P1PPP/RNB1K2R w KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
         let mv = MoveRep::new(
             1 << Tables::E1,
             1 << Tables::G1,
@@ -3425,7 +3338,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/3P4/2NQB3/PPP1PPPP/R3KBNR w KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
         let mv = MoveRep::new(
             1 << Tables::E1,
             1 << Tables::C1,
@@ -3451,7 +3363,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqk2r/pppppp1p/5n1b/6p1/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
         let mv = MoveRep::new(
             1 << Tables::E8,
             1 << Tables::G8,
@@ -3477,7 +3388,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "r3kbnr/ppp1pppp/2nqb3/3p4/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
         let mv = MoveRep::new(
             1 << Tables::E8,
             1 << Tables::C8,
@@ -3503,7 +3413,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let kingside_rook_move = MoveRep::new(
             1 << Tables::H1,
@@ -3522,7 +3431,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/P6P/8/1PPPPPP1/RNBQKBNR w KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let queenside_rook_move = MoveRep::new(
             1 << Tables::A1,
@@ -3542,7 +3450,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/pppppppp/8/8/P3P2P/8/1PPP1PP1/RNBQKBNR w KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let king_move = MoveRep::new(
             1 << Tables::E1,
@@ -3562,7 +3469,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/ppppppp1/8/7p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let kingside_rook_move = MoveRep::new(
             1 << Tables::H8,
@@ -3582,7 +3488,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/1pppppp1/8/p6p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let queenside_rook_move = MoveRep::new(
             1 << Tables::A8,
@@ -3602,7 +3507,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkbnr/1pppppp1/8/p6p/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let king_move = MoveRep::new(
             1 << Tables::E8,
@@ -3623,7 +3527,6 @@ mod tests {
         let mut board = BoardState::state_from_string_fen(
             "rnbqkb2/pppppp1P/8/8/8/8/PPPPP1PP/RNBQKBNR w KQq - 0 1".to_string(),
         );
-        let tables = Tables::new();
 
         let mv = MoveRep::new(
             1 << Tables::H7,

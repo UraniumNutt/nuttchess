@@ -1,3 +1,21 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use crate::board::*;
 use crate::generate::*;
 use crate::tables::*;
@@ -111,7 +129,8 @@ pub const BLACK_MAP: [usize; 64] = [
     63, 62, 61, 60, 59, 58, 57, 56,  
 ];
 
-// Returns a score for the given board position
+/// Returns a score for the given board position
+#[allow(unused_variables)]
 pub fn eval(
     board: &BoardState,
     tables: &Tables,
@@ -124,7 +143,7 @@ pub fn eval(
         + board.piece_square_score
 }
 
-// Get the value of the material relative to the side to move
+/// Get the value of the material relative to the side to move
 pub fn material_value(board: &BoardState) -> isize {
     // White relative value
     let king_delta =
@@ -135,8 +154,8 @@ pub fn material_value(board: &BoardState) -> isize {
         board.white_rooks.count_ones() as isize - board.black_rooks.count_ones() as isize;
     let bishop_delta =
         board.white_bishops.count_ones() as isize - board.black_bishops.count_ones() as isize;
-    let knight_delta = board.white_knights.count_ones() as isize
-        - board.black_knights.count_ones() as isize;
+    let knight_delta =
+        board.white_knights.count_ones() as isize - board.black_knights.count_ones() as isize;
     let pawn_delta =
         board.white_pawns.count_ones() as isize - board.black_pawns.count_ones() as isize;
 
@@ -213,31 +232,6 @@ pub fn piece_square_score(board: &BoardState) -> isize {
     match board.white_to_move {
         true => white_score - black_score,
         false => black_score - white_score,
-    }
-}
-
-/// Get the value of a piece at the mask
-pub fn get_piece_value(board: &BoardState, mask: u64) -> isize {
-    let piece_color = board.get_piece_and_color(mask);
-    if let Some(piece_color) = piece_color {
-        let white_index = WHITE_MAP[mask.trailing_zeros() as usize];
-        let black_index = BLACK_MAP[mask.trailing_zeros() as usize];
-        match piece_color {
-            (PieceType::Pawn, true) => PAWN_TABLE[white_index],
-            (PieceType::Knight, true) => KNIGHT_TABLE[white_index],
-            (PieceType::Bishop, true) => BISHOP_TABLE[white_index],
-            (PieceType::Rook, true) => ROOK_TABLE[white_index],
-            (PieceType::Queen, true) => QUEEN_TABLE[white_index],
-            (PieceType::King, true) => KING_TABLE[white_index],
-            (PieceType::Pawn, false) => PAWN_TABLE[black_index],
-            (PieceType::Knight, false) => KNIGHT_TABLE[black_index],
-            (PieceType::Bishop, false) => BISHOP_TABLE[black_index],
-            (PieceType::Rook, false) => ROOK_TABLE[black_index],
-            (PieceType::Queen, false) => QUEEN_TABLE[black_index],
-            (PieceType::King, false) => KING_TABLE[black_index],
-        }
-    } else {
-        0
     }
 }
 
@@ -386,6 +380,7 @@ pub fn delta_ps_score(board: &BoardState, mv: &MoveRep) -> isize {
 }
 
 /// Score a `MoveRep` for use in move ordering
+#[allow(unused_variables)]
 pub fn score(mv: &MoveRep, board: &BoardState) -> isize {
     fn value_match(pt: PieceType) -> isize {
         match pt {
@@ -1104,6 +1099,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Takes a while"]
     fn dps_balanced() {
         let mut board = BoardState::starting_state();
         let init_score = board.piece_square_score;

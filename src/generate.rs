@@ -1,3 +1,21 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use crate::{
     board::{BoardState, MoveRep, PieceType, Promotion},
     tables::Tables,
@@ -461,7 +479,6 @@ fn white_pawn_moves(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
 
@@ -585,8 +602,6 @@ fn white_knight_attacks(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
-    let occupancy = board.occupancy();
     let mut knight_bb = board.white_knights;
     while knight_bb != 0 {
         let start_square = pop_lsb(&mut knight_bb);
@@ -620,7 +635,6 @@ fn white_rook_attacks(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
 
     let mut rook_bb = board.white_rooks;
@@ -653,7 +667,6 @@ fn white_bishop_attacks(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
     let mut bishop_bb = board.white_bishops;
     while bishop_bb != 0 {
@@ -685,7 +698,6 @@ fn white_queen_attacks(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
     // Rook like
     let mut rook_bb = board.white_queens;
@@ -740,8 +752,6 @@ fn white_king_attacks(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
-    let occupancy = board.occupancy();
     let mut king_bb = board.white_king;
     while king_bb != 0 {
         let start_square = pop_lsb(&mut king_bb) as u64;
@@ -775,7 +785,6 @@ fn black_pawn_moves(
     moves: &mut Vec<MoveRep>,
 ) {
     let white_occupancy = board.white_occupancy();
-    let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
 
     let mut pawn_bb = board.black_pawns;
@@ -898,9 +907,7 @@ fn black_knight_attacks(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
-    let occupancy = board.occupancy();
     let mut knight_bb = board.black_knights;
     while knight_bb != 0 {
         let start_square = pop_lsb(&mut knight_bb);
@@ -933,7 +940,6 @@ fn black_rook_attacks(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
     let mut rook_bb = board.black_rooks;
@@ -965,7 +971,6 @@ fn black_bishop_attacks(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
     let mut bishop_bb = board.black_bishops;
@@ -997,7 +1002,6 @@ fn black_queen_attacks(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
     let occupancy = board.occupancy();
     let mut rook_bb = board.black_queens;
@@ -1051,9 +1055,7 @@ fn black_king_attacks(
     king: u64,
     moves: &mut Vec<MoveRep>,
 ) {
-    let white_occupancy = board.white_occupancy();
     let black_occupancy = board.black_occupancy();
-    let occupancy = board.occupancy();
     let mut king_bb = board.black_king;
     while king_bb != 0 {
         let start_square = pop_lsb(&mut king_bb) as u64;
