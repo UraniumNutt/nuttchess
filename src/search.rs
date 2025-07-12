@@ -1,36 +1,55 @@
+/*
+Copyright 2025 Ethan Thummel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 use std::time::Instant;
 
-use crate::board::*;
-use crate::eval::*;
-use crate::generate::*;
-use crate::tables::*;
-use crate::tt::ZobKeys;
+use crate::{
+    board::{BoardState, MoveRep},
+    eval::{eval, score, DRAW, WIN},
+    generate::generate,
+    tables::Tables,
+    tt::ZobKeys,
+};
+
+/// Does a 'perft' function from the given boardstate
 pub fn perft(board: &mut BoardState, depth: usize, zob_keys: &ZobKeys) {
     let tables = Tables::new();
     let top_moves = generate(board, &tables);
     let mut total_node_count = 0;
     for lower_move in top_moves {
-        if let Ok(move_name) = lower_move.to_string() {
-            board.make(&lower_move, &zob_keys);
-            let lower_node_count = perft_search(board, &tables, zob_keys, depth - 1);
-            total_node_count += lower_node_count;
-            board.unmake(&lower_move, &zob_keys);
+        board.make(&lower_move, zob_keys);
+        let lower_node_count = perft_search(board, &tables, zob_keys, depth - 1);
+        total_node_count += lower_node_count;
+        board.unmake(&lower_move, zob_keys);
 
-            println!("{} {}", move_name, lower_node_count);
-        } else {
-            panic!();
-        }
+        println!("{} {lower_node_count}", lower_move.to_string());
     }
-    println!("\n{}", total_node_count);
+    println!("\n{total_node_count}");
 }
 
+/// Child function of perft
 pub fn perft_search(
     board: &mut BoardState,
     tables: &Tables,
     zob_keys: &ZobKeys,
     depth: usize,
 ) -> usize {
-    let moves = generate(board, &tables);
+    let moves = generate(board, tables);
     if depth == 1 {
         return moves.len();
     }
@@ -39,11 +58,11 @@ pub fn perft_search(
     }
     let mut node_count = 0;
     for mv in moves {
-        board.make(&mv, &zob_keys);
-        node_count += perft_search(board, &tables, zob_keys, depth - 1);
+        board.make(&mv, zob_keys);
+        node_count += perft_search(board, tables, zob_keys, depth - 1);
         board.unmake(&mv, zob_keys);
     }
-    return node_count;
+    node_count
 }
 
 // Prototype search
@@ -54,43 +73,40 @@ pub fn negamax(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
-    test_counter: &mut usize,
-) -> Result<MoveRep, String> {
+) -> MoveRep {
     let mut moves = generate(board, tables);
 
-    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
+    moves.sort_by_key(|b| std::cmp::Reverse(score(b, board)));
 
     // If all moves result in draw, none will be picked, so set the bestmove in the event that no moved is picked
     let mut best_move = moves[0];
     let mut alpha = isize::MIN;
-    let mut beta = isize::MAX;
+    let beta = isize::MAX;
     let mut node_count = 0;
     for mv in &moves {
-        board.make(&mv, zob_keys);
+        board.make(mv, zob_keys);
         let score = negamax_child(
             board,
             tables,
             zob_keys,
             beta.saturating_neg(),
             alpha.saturating_neg(),
-            moves.len(),
             depth - 1,
             timer,
             duration,
             &mut node_count,
-            test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv, zob_keys);
+        board.unmake(mv, zob_keys);
         if score > alpha {
             alpha = score;
             if alpha >= beta {
-                return Ok(*mv);
+                return *mv;
             }
             best_move = *mv;
         }
     }
-    return Ok(best_move);
+    best_move
 }
 
 fn negamax_child(
@@ -98,38 +114,30 @@ fn negamax_child(
     tables: &Tables,
     zob_keys: &ZobKeys,
     mut alpha: isize,
-    mut beta: isize,
-    last_number_of_moves: usize,
+    beta: isize,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
     node_count: &mut usize,
-    test_counter: &mut usize,
 ) -> isize {
     let mut moves = generate(board, tables);
 
-    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
-    if moves.len() == 0 {
-        // println!("Zeros moves generated at a depth of {}", depth);
-        // print_bitboard(board.occupancy());
+    moves.sort_by_key(|b| std::cmp::Reverse(score(b, board)));
+    if moves.is_empty() {
         match board.white_to_move {
             true => {
-                let black_attack_mask = board.black_attack_mask(&tables);
+                let black_attack_mask = board.black_attack_mask(tables);
                 if black_attack_mask & board.white_king == 0 {
-                    // println!("Returning a draw with white to move");
                     return DRAW;
                 } else {
-                    // println!("Returning a lose with white to move");
                     return -WIN * (depth + 1) as isize;
                 }
             }
             false => {
-                let white_attack_mask = board.white_attack_mask(&tables);
+                let white_attack_mask = board.white_attack_mask(tables);
                 if white_attack_mask & board.black_king == 0 {
-                    // println!("Returning a draw with black to move");
                     return DRAW;
                 } else {
-                    // println!("Returning a lose with black to move");
                     return -WIN * (depth + 1) as isize;
                 }
             }
@@ -149,36 +157,28 @@ fn negamax_child(
             timer,
             duration,
             moves.len(),
-            test_counter,
         );
     }
     for mv in &moves {
-        match (timer, duration) {
-            (Some(t), Some(d)) => {
-                if t.elapsed().as_millis() > d {
-                    // TODO Should this just break?
-                    return DRAW;
-                }
+        if let (Some(t), Some(d)) = (timer, duration) {
+            if t.elapsed().as_millis() > d {
+                break;
             }
-            _ => {}
         }
-        // println!("Running child search on move {}", mv.to_string().unwrap());
-        board.make(&mv, zob_keys);
+        board.make(mv, zob_keys);
         let score = negamax_child(
             board,
             tables,
             zob_keys,
             beta.saturating_neg(),
             alpha.saturating_neg(),
-            moves.len(),
             depth - 1,
             timer,
             duration,
             node_count,
-            test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv, zob_keys);
+        board.unmake(mv, zob_keys);
 
         if score >= beta {
             return beta;
@@ -187,7 +187,7 @@ fn negamax_child(
             alpha = score;
         }
     }
-    return alpha;
+    alpha
 }
 
 /// Preforms a search using iterative deepening
@@ -195,26 +195,15 @@ pub fn id_search(
     board: &mut BoardState,
     tables: &Tables,
     zob_keys: &ZobKeys,
-    depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
-    node_count: &mut usize,
 ) -> MoveRep {
     let mut current_depth = 1;
-    let mut test_counter = 0;
-    let mut best_move = negamax(board, tables, zob_keys, 1, None, None, &mut test_counter);
+    let mut best_move = negamax(board, tables, zob_keys, 1, None, None);
 
     loop {
         current_depth += 1;
-        let possible_best = negamax(
-            board,
-            tables,
-            zob_keys,
-            current_depth,
-            timer,
-            duration,
-            &mut test_counter,
-        );
+        let possible_best = negamax(board, tables, zob_keys, current_depth, timer, duration);
         if !timer_check(timer, duration) {
             best_move = possible_best;
         } else {
@@ -222,7 +211,7 @@ pub fn id_search(
         }
     }
 
-    best_move.unwrap()
+    best_move
 }
 
 /// Preform the quiescence search
@@ -231,16 +220,14 @@ fn quiescence(
     tables: &Tables,
     zob_keys: &ZobKeys,
     mut alpha: isize,
-    mut beta: isize,
+    beta: isize,
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
     last_number_moves: usize,
-    test_counter: &mut usize,
 ) -> isize {
-    *test_counter += 1;
     let mut moves = generate(board, tables);
-    moves.sort_by(|a, b| score(b, board).cmp(&score(a, board)));
+    moves.sort_by_key(|b| std::cmp::Reverse(score(b, board)));
     let number_moves = moves.len();
     let initial_eval = eval(board, tables, number_moves, last_number_moves);
     // TODO Investigate using delta pruning instead of an arbitrary depth limit
@@ -265,7 +252,7 @@ fn quiescence(
             // Skip non captures
             continue;
         }
-        board.make(&mv, zob_keys);
+        board.make(mv, zob_keys);
         let score = quiescence(
             board,
             tables,
@@ -276,10 +263,9 @@ fn quiescence(
             timer,
             duration,
             number_moves,
-            test_counter,
         )
         .saturating_neg();
-        board.unmake(&mv, zob_keys);
+        board.unmake(mv, zob_keys);
         if score >= beta {
             return score;
         }
@@ -296,19 +282,15 @@ fn quiescence(
 
 pub fn timer_check(timer: Option<Instant>, duration: Option<u128>) -> bool {
     match (timer, duration) {
-        (Some(t), Some(d)) => {
-            if t.elapsed().as_millis() > d {
-                return true;
-            } else {
-                return false;
-            }
-        }
-        _ => return false,
+        (Some(t), Some(d)) => t.elapsed().as_millis() > d,
+        _ => false,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::board::PieceType;
+
     use super::*;
 
     #[test]
@@ -692,7 +674,7 @@ mod tests {
 
     #[test]
     fn illegal_pawn_move() {
-        let mut board = BoardState::state_from_string_fen(
+        let board = BoardState::state_from_string_fen(
             "r4q1r/pp6/2nP3P/2PNpbkp/Q4Pp1/6P1/PP6/R3KBNR b KQ f3 0 19".to_string(),
         );
         let tables = Tables::new();
@@ -705,7 +687,7 @@ mod tests {
         );
         let moves = generate(&board, &tables);
         for mv in &moves {
-            println!("{}", mv.to_string().unwrap());
+            println!("{}", mv.to_string());
         }
         assert!(!moves.contains(&move1));
     }
