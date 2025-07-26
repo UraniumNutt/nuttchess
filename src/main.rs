@@ -25,7 +25,7 @@ mod search;
 mod tables;
 mod tt;
 
-use board::BoardState;
+use board::{BoardState, HashHistory};
 use search::{id_search, negamax, perft};
 use tables::Tables;
 use tt::ZobKeys;
@@ -33,6 +33,7 @@ use tt::ZobKeys;
 fn main() {
     let mut board = BoardState::starting_state();
     let zob_keys = ZobKeys::new();
+    let mut hash_history = HashHistory::new();
     let mut running = true;
 
     let tables = Tables::new();
@@ -48,7 +49,10 @@ fn main() {
             "isready" => {
                 println!("readyok");
             }
-            "ucinewgame" => {}
+            "ucinewgame" => {
+                // Since this is a new game, the game history needs to be cleared
+                hash_history = HashHistory::new();
+            }
             "position" => match tokens.next().unwrap() {
                 "startpos" => {
                     board = BoardState::starting_state();
@@ -119,6 +123,11 @@ fn main() {
                         Some(starting_time),
                         Some(time_to_spend),
                     );
+
+                    // Add the hash of resultant board to the history
+                    board.make(&best_move, &zob_keys);
+                    hash_history.add_state(board.hash);
+                    board.unmake(&best_move, &zob_keys);
                     println!("bestmove {}", best_move.to_string());
                 }
                 "movetime" => {
@@ -131,6 +140,10 @@ fn main() {
                         Some(starting_time),
                         Some(ms as u128),
                     );
+                    // Add the hash of resultant board to the history
+                    board.make(&best_move, &zob_keys);
+                    hash_history.add_state(board.hash);
+                    board.unmake(&best_move, &zob_keys);
                     println!("bestmove {}", best_move.to_string());
                 }
                 "depth" => {
@@ -146,6 +159,10 @@ fn main() {
                                     None,
                                     None,
                                 );
+                                // Add the hash of resultant board to the history
+                                board.make(&best_move, &zob_keys);
+                                hash_history.add_state(board.hash);
+                                board.unmake(&best_move, &zob_keys);
                                 println!("bestmove {}", best_move.to_string());
                             }
                         }

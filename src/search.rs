@@ -83,6 +83,7 @@ pub fn negamax(
     let mut alpha = isize::MIN;
     let beta = isize::MAX;
     let mut node_count = 0;
+
     for mv in &moves {
         board.make(mv, zob_keys);
         let score = negamax_child(

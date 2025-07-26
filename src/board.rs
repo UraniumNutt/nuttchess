@@ -59,6 +59,33 @@ pub struct MoveRep {
     pub attacked_type: Option<PieceType>,
 }
 
+/// Stores of a history of the last few moves to detect the majority of repetition cases
+pub struct HashHistory {
+    history: [u64; 8],
+    ptr: usize,
+}
+
+impl HashHistory {
+    const SIZE: u64 = 8;
+    pub fn new() -> HashHistory {
+        HashHistory {
+            history: [0; 8],
+            ptr: 0,
+        }
+    }
+
+    pub fn add_state(&mut self, state: u64) {
+        self.history[self.ptr] = state;
+        self.ptr = (self.ptr + 1) % 8;
+    }
+
+    pub fn check_rep(self, state: u64) -> bool {
+        (self.history[(self.ptr - 2) % 8] == state)
+            || (self.history[(self.ptr - 4) % 8] == state)
+            || (self.history[(self.ptr - 6) % 8] == state)
+    }
+}
+
 impl MoveRep {
     pub fn new(
         starting_square: u64,
