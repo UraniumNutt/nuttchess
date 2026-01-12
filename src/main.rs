@@ -122,6 +122,7 @@ fn main() {
                         &zob_keys,
                         Some(starting_time),
                         Some(time_to_spend),
+                        &mut hash_history,
                     );
 
                     // Add the hash of resultant board to the history
@@ -139,6 +140,7 @@ fn main() {
                         &zob_keys,
                         Some(starting_time),
                         Some(ms as u128),
+                        &mut hash_history,
                     );
                     // Add the hash of resultant board to the history
                     board.make(&best_move, &zob_keys);
@@ -158,6 +160,7 @@ fn main() {
                                     depth_number as usize,
                                     None,
                                     None,
+                                    &mut hash_history,
                                 );
                                 // Add the hash of resultant board to the history
                                 board.make(&best_move, &zob_keys);

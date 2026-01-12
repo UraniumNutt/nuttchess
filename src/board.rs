@@ -66,7 +66,6 @@ pub struct HashHistory {
 }
 
 impl HashHistory {
-    const SIZE: u64 = 8;
     pub fn new() -> HashHistory {
         HashHistory {
             history: [0; 8],
@@ -79,7 +78,7 @@ impl HashHistory {
         self.ptr = (self.ptr + 1) % 8;
     }
 
-    pub fn check_rep(self, state: u64) -> bool {
+    pub fn check_rep(&mut self, state: u64) -> bool {
         (self.history[(self.ptr - 2) % 8] == state)
             || (self.history[(self.ptr - 4) % 8] == state)
             || (self.history[(self.ptr - 6) % 8] == state)

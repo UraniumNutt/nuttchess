@@ -19,7 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 use std::time::Instant;
 
 use crate::{
-    board::{BoardState, MoveRep},
+    board::{BoardState, HashHistory, MoveRep},
     eval::{eval, score, DRAW, WIN},
     generate::generate,
     tables::Tables,
@@ -73,6 +73,7 @@ pub fn negamax(
     depth: usize,
     timer: Option<Instant>,
     duration: Option<u128>,
+    hash_history: &mut HashHistory,
 ) -> MoveRep {
     let mut moves = generate(board, tables);
 
@@ -96,6 +97,7 @@ pub fn negamax(
             timer,
             duration,
             &mut node_count,
+            hash_history,
         )
         .saturating_neg();
         board.unmake(mv, zob_keys);
@@ -120,6 +122,7 @@ fn negamax_child(
     timer: Option<Instant>,
     duration: Option<u128>,
     node_count: &mut usize,
+    hash_history: &mut HashHistory,
 ) -> isize {
     let mut moves = generate(board, tables);
 
@@ -146,8 +149,7 @@ fn negamax_child(
     }
     if depth == 0 {
         *node_count += 1;
-        // TODO Investigate delta pruning. The fact that depth limits greater than 2 dont really improve preformance suggests
-        // that this is not really a great approach
+        // TODO: Investigate removing the hard cap on the quiescence search
         return quiescence(
             board,
             tables,
@@ -158,6 +160,7 @@ fn negamax_child(
             timer,
             duration,
             moves.len(),
+            hash_history,
         );
     }
     for mv in &moves {
@@ -177,6 +180,7 @@ fn negamax_child(
             timer,
             duration,
             node_count,
+            hash_history,
         )
         .saturating_neg();
         board.unmake(mv, zob_keys);
@@ -198,13 +202,22 @@ pub fn id_search(
     zob_keys: &ZobKeys,
     timer: Option<Instant>,
     duration: Option<u128>,
+    hash_history: &mut HashHistory,
 ) -> MoveRep {
     let mut current_depth = 1;
-    let mut best_move = negamax(board, tables, zob_keys, 1, None, None);
+    let mut best_move = negamax(board, tables, zob_keys, 1, None, None, hash_history);
 
     loop {
         current_depth += 1;
-        let possible_best = negamax(board, tables, zob_keys, current_depth, timer, duration);
+        let possible_best = negamax(
+            board,
+            tables,
+            zob_keys,
+            current_depth,
+            timer,
+            duration,
+            hash_history,
+        );
         if !timer_check(timer, duration) {
             best_move = possible_best;
         } else {
@@ -226,6 +239,7 @@ fn quiescence(
     timer: Option<Instant>,
     duration: Option<u128>,
     last_number_moves: usize,
+    hash_history: &mut HashHistory,
 ) -> isize {
     let mut moves = generate(board, tables);
     moves.sort_by_key(|b| std::cmp::Reverse(score(b, board)));
@@ -249,6 +263,7 @@ fn quiescence(
             break;
         }
         // TODO Make a diffrent move generation function which only produces captures
+        // NOTE Could this be why removing the hard limit reduces preformance?
         if mv.ending_square & board.occupancy() == 0 {
             // Skip non captures
             continue;
@@ -264,6 +279,7 @@ fn quiescence(
             timer,
             duration,
             number_moves,
+            hash_history,
         )
         .saturating_neg();
         board.unmake(mv, zob_keys);
